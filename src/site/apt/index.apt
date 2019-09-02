@@ -1,0 +1,16 @@
+Waarp Vitam Ingest
+
+  The Waarp Vitam Ingest project is a plugin for Waarp and Vitam projects to
+  enable ingest through Waarp to Vitam.
+
+Dependency
+
+  It is based mainly on the NETTY framework (NIO great framework support at {{http://netty.io}}
+  and is tend to be really efficient, both in term of memory, threads and network bandwidth.
+
+
+[images/waarp.jpg] Waarp Main Project Logo
+
+  See global Waarp project at {{http://waarp.github.com/Waarp/}}
+
+  See global Vitam project at {{https://github.com/ProgrammeVitam/vitam/}}
