@@ -26,35 +26,54 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
-import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.Version;
 import org.waarp.openr66.configuration.FileBasedConfiguration;
 import org.waarp.openr66.protocol.configuration.Configuration;
 
 import java.io.File;
-import java.util.Properties;
 
+/**
+ * IngestMonitor is the daemon taking care of IngestRequests through a
+ * directory containing JSON files
+ */
 public class IngestMonitor {
   /**
    * Internal Logger
    */
   private static final WaarpLogger logger =
       WaarpLoggerFactory.getLogger(IngestMonitor.class);
-  private static File baseDir = null;
+  private static File waarpConfigurationFile;
   private final long elapseTime;
   private final File stopFile;
-  private final File waarpConfigurationFile;
+  private final IngestRequestFactory factory;
+  private final IngestManager ingestManager;
 
+  /**
+   * Unique constructor
+   *
+   * @param elapseTime
+   * @param stopFile
+   * @param factory
+   * @param ingestManager
+   */
   public IngestMonitor(final long elapseTime, final File stopFile,
-                       final File waarpConfigurationFile) {
+                       final IngestRequestFactory factory,
+                       final IngestManager ingestManager) {
     this.elapseTime = elapseTime;
     this.stopFile = stopFile;
-    this.waarpConfigurationFile = waarpConfigurationFile;
+    this.factory = factory;
+    this.ingestManager = ingestManager;
   }
 
+  /**
+   * Define the options associated
+   *
+   * @return the Options
+   */
   private static Options getOptions() {
     Options options = new Options();
     options.addRequiredOption("s", "stopfile", true, "Path of the stop file")
@@ -62,19 +81,27 @@ public class IngestMonitor {
            .addOption(Option.builder("e").longOpt("elapse").hasArg(true)
                             .type(Number.class).desc("Elapse time in seconds")
                             .build());
-    Option property = OptionBuilder.withArgName("property=value").hasArgs(2)
-                                   .withValueSeparator().withDescription(
-            "use value for given property").create("D");
-    options.addOption(property);
+    options.addOption(IngestRequestFactory.getDirectoryOption());
     return options;
   }
 
+  /**
+   * Build the IngestMonitor according to arguments
+   *
+   * @param options
+   * @param args
+   *
+   * @return the new IngestMonitor
+   *
+   * @throws ParseException
+   */
   private static IngestMonitor getIngestMonitor(Options options, String[] args)
       throws ParseException {
     CommandLineParser parser = new DefaultParser();
     CommandLine cmd = parser.parse(options, args);
+    IngestRequestFactory.parseDirectoryOption(cmd);
     final String stopFilePath = cmd.getOptionValue('s');
-    final String waarpConfigurationFile = cmd.getOptionValue('w');
+    final String waarpConfiguration = cmd.getOptionValue('w');
     final int elapseInSecond;
     if (cmd.hasOption('e')) {
       final String selapse = cmd.getOptionValue('e');
@@ -89,22 +116,35 @@ public class IngestMonitor {
     } else {
       elapseInSecond = 10;
     }
-    if (cmd.hasOption('D')) {
-      Properties properties = cmd.getOptionProperties("D");
-      baseDir = new File(properties.getProperty(
-          IngestRequestFactory.ORG_WAARP_INGEST_BASEDIR,
-          IngestRequestFactory.TMP_INGEST_FACTORY));
-    }
-    return new IngestMonitor(elapseInSecond * 1000, new File(stopFilePath),
-                             new File(waarpConfigurationFile));
+    waarpConfigurationFile = new File(waarpConfiguration);
+    return new IngestMonitor(elapseInSecond * 1000L, new File(stopFilePath),
+                             IngestRequestFactory.getInstance(),
+                             new IngestManager());
   }
 
+  /**
+   * Helper to print help
+   *
+   * @param options
+   */
+  private static void printHelp(Options options) {
+    HelpFormatter formatter = new HelpFormatter();
+    formatter.printHelp(IngestMonitor.class.getSimpleName(),
+                        "Version: " + Version.fullIdentifier(), options, "",
+                        true);
+  }
+
+  /**
+   * Will try to start the IngestMonitor according to arguments, else print
+   * the help message
+   *
+   * @param args
+   */
   public static void main(String[] args) {
     Options options = getOptions();
-    HelpFormatter formatter = new HelpFormatter();
 
     if (args.length == 0) {
-      formatter.printHelp(IngestMonitor.class.getSimpleName(), options);
+      printHelp(options);
       return;
     }
     final IngestMonitor ingestMonitor;
@@ -113,13 +153,12 @@ public class IngestMonitor {
     } catch (ParseException e) {
       logger.error("Error while initializing {}", IngestMonitor.class.getName(),
                    e);
-      formatter.printHelp(IngestMonitor.class.getSimpleName(), options);
+      printHelp(options);
       return;
     }
-    IngestRequestFactory.setBaseDir(baseDir);
     if (!FileBasedConfiguration
         .setSubmitClientConfigurationFromXml(Configuration.configuration,
-                                             ingestMonitor.waarpConfigurationFile
+                                             waarpConfigurationFile
                                                  .getAbsolutePath())) {
       logger.error("Cannot load Waarp Configuration");
       return;
@@ -127,17 +166,18 @@ public class IngestMonitor {
     ingestMonitor.invoke();
   }
 
+  /**
+   * Launch the IngestMonitor
+   */
   public void invoke() {
-    try (IngestExternalClient client = IngestRequestFactory.getInstance()
-                                                           .getClient()) {
-      logger.info("Start of {}", IngestMonitor.class.getName());
+    try (IngestExternalClient client = factory.getClient()) {
+      logger.warn("Start of {}", IngestMonitor.class.getName());
       while (!stopFile.exists()) {
-        IngestManager
-            .retryAllExistingFiles(IngestRequestFactory.getInstance(), client);
+        ingestManager.retryAllExistingFiles(factory, client, stopFile);
         Thread.sleep(elapseTime);
       }
-      logger.info("Stop of {}", IngestMonitor.class.getName());
-    } catch (InterruptedException e) {
+      logger.warn("Stop of {}", IngestMonitor.class.getName());
+    } catch (InterruptedException e) {//NOSONAR
       logger.error("{} will stop", IngestMonitor.class.getName(), e);
     }
   }

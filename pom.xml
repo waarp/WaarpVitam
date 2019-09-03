@@ -224,11 +224,11 @@
 
     <!-- Dependencies versions -->
     <vitam.version>2.6.3-1</vitam.version>
-    <netty.version>4.1.36.Final</netty.version>
+    <netty.version>4.1.39.Final</netty.version>
     <netty-tcnative.version>2.0.25.Final</netty-tcnative.version>
     <slf4j.version>1.7.26</slf4j.version>
     <logback.version>1.2.3</logback.version>
-    <commons.compress.version>1.18</commons.compress.version>
+    <commons.compress.version>1.19</commons.compress.version>
     <commons.daemon.version>1.2.0</commons.daemon.version>
     <commons.io.version>2.6</commons.io.version>
     <commons.dbcp.version>1.4</commons.dbcp.version>
@@ -239,9 +239,9 @@
     <commons-codec.version>1.12</commons-codec.version>
     <commons-beanutils.version>1.8.3</commons-beanutils.version>
     <commons-cli.version>1.4</commons-cli.version>
-    <h2.version>1.4.199</h2.version>
+    <h2.version>1.4.191</h2.version><!--Java6 version -->
     <mariadb.version>1.7.4</mariadb.version>
-    <mysql.version>5.1.47</mysql.version>
+    <mysql.version>5.1.48</mysql.version>
     <postgresql.version>42.2.6.jre6</postgresql.version>
     <oracle.version>6</oracle.version>
     <jackson.version>2.9.9</jackson.version>
@@ -258,6 +258,7 @@
     <log4j2.version>2.12.1</log4j2.version>
     <selenium.version>3.141.59</selenium.version><!-- 3.3.1 4.0.0-alpha-2 3.141
     .59-->
+    <jnr-posix-version>3.0.50</jnr-posix-version>
 
     <!-- Maven plugins -->
     <maven.rpm-maven-plugin.version>2.1.5</maven.rpm-maven-plugin.version>
@@ -923,17 +924,15 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <source>8</source>
-          <target>8</target>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
       </plugin>
     </plugins>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
   </build>
 
   <profiles>
@@ -1164,6 +1163,7 @@
               <version>true</version>
               <author>true</author>
               <keywords>true</keywords>
+              <doclint>none</doclint>
               <doctitle>${project.name} ${project.version}
               </doctitle>
               <windowtitle>${project.name} ${project.version}
@@ -1325,6 +1325,10 @@
             <groupId>fr.gouv.vitam</groupId>
             <artifactId>common-dsl-schema</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+          </exclusion>
         </exclusions>
         <version>${vitam.version}</version>
         <scope>test</scope>
@@ -1389,7 +1393,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
-        <version>2.9.9</version>
+        <version>2.9.9.3</version>
       </dependency>
       <dependency>
         <groupId>com.github.fge</groupId>
@@ -1571,6 +1575,24 @@
     <dependency>
       <groupId>fr.gouv.vitam</groupId>
       <artifactId>common-junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.ant</groupId>
+      <artifactId>ant</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.github.jnr</groupId>
+      <artifactId>jnr-posix</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpCommon</artifactId>
+      <classifier>tests</classifier>
+      <type>test-jar</type>
+      <version>${waarp.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

@@ -24,14 +24,24 @@ import fr.gouv.vitam.common.exception.InvalidParseOperationException;
 import fr.gouv.vitam.common.json.JsonHandler;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClientFactory;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
+import org.waarp.common.logging.SysErrLogger;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.SystemPropertyUtil;
 
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
+/**
+ * Factory that handles IngestRequest within a directory
+ */
 public class IngestRequestFactory {
   /**
    * Internal Logger
@@ -42,10 +52,10 @@ public class IngestRequestFactory {
   private static final String WORK = "work";
   static final String ORG_WAARP_INGEST_BASEDIR = "org.waarp.ingest.basedir";
 
-  static boolean VITAM_TAKE_CARE_LOCAL_FILE = true;
+  static boolean vitamTakeCareLocalFile = true;
   private static final String BASENAME =
       IngestRequest.class.getSimpleName() + ".";
-  private static final String EXTENSION = ".json ";
+  private static final String EXTENSION = ".json";
   private static final FilenameFilter JSON_ONLY =
       (dir, name) -> name.startsWith(BASENAME) && name.endsWith(EXTENSION);
   private static final IngestRequestFactory FACTORY =
@@ -55,10 +65,52 @@ public class IngestRequestFactory {
     setBaseDir(new File(TMP_INGEST_FACTORY));
   }
 
+  /**
+   * @return the unique name for JSON
+   */
   private static String getNewName() {
-    return BASENAME + System.currentTimeMillis() + EXTENSION;
+    synchronized (FACTORY) {
+      return BASENAME + System.nanoTime() + EXTENSION;
+    }
   }
 
+  /**
+   * Common options
+   *
+   * @return common Options
+   */
+  static Option getDirectoryOption() {
+    Option property =
+        new Option("D", "Use value for property " + ORG_WAARP_INGEST_BASEDIR);
+    property.setArgName("property=value");
+    property.setArgs(2);
+    property.setValueSeparator('=');
+    return property;
+  }
+
+  /**
+   * Common parse command line and setup Base Directory
+   *
+   * @param cmd
+   */
+  static void parseDirectoryOption(CommandLine cmd) {
+    if (cmd.hasOption('D')) {
+      Properties properties = cmd.getOptionProperties("D");
+      setBaseDir(new File(properties.getProperty(ORG_WAARP_INGEST_BASEDIR,
+                                                 TMP_INGEST_FACTORY)));
+    } else if (SystemPropertyUtil.contains(ORG_WAARP_INGEST_BASEDIR)) {
+      setBaseDir(new File(SystemPropertyUtil.get(ORG_WAARP_INGEST_BASEDIR,
+                                                 TMP_INGEST_FACTORY)));
+    } else {
+      setBaseDir(new File(TMP_INGEST_FACTORY));
+    }
+  }
+
+  /**
+   * Set Base Directory
+   *
+   * @param baseDirToSet
+   */
   public static void setBaseDir(File baseDirToSet) {
     FACTORY.baseDir = baseDirToSet;
     FACTORY.baseDir.mkdirs();
@@ -66,6 +118,9 @@ public class IngestRequestFactory {
     FACTORY.workDir.mkdirs();
   }
 
+  /**
+   * @return the instance of the factory
+   */
   public static IngestRequestFactory getInstance() {
     return FACTORY;
   }
@@ -79,77 +134,149 @@ public class IngestRequestFactory {
     // empty
   }
 
+  /**
+   * Used in JUnit
+   */
+  void setBaseDir() {
+    baseDir = FACTORY.baseDir;
+    workDir = FACTORY.workDir;
+  }
+
+  /**
+   * @return the Ingest Vitam client
+   */
   public IngestExternalClient getClient() {
     return clientFactory.getClient();
   }
 
-  void saveNewIngestRequest(IngestRequest ingestRequest)
+  /**
+   * Save the IngestRequest as a new one, creating file
+   *
+   * @param ingestRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  synchronized void saveNewIngestRequest(IngestRequest ingestRequest)
       throws InvalidParseOperationException {
-    synchronized (FACTORY) {
-      File newFile = new File(baseDir, getNewName());
-      ingestRequest.setJsonPath(newFile.getName());
-      JsonHandler.writeAsFile(ingestRequest, newFile);
-    }
+    File newFile = new File(baseDir, getNewName());
+    ingestRequest.setJsonPath(newFile.getName());
+    JsonHandler.writeAsFile(ingestRequest, newFile);
   }
 
-  void saveIngestRequest(IngestRequest ingestRequest)
+  /**
+   * Update the IngestRequest
+   *
+   * @param ingestRequest
+   *
+   * @return true if saved
+   *
+   * @throws InvalidParseOperationException
+   */
+  synchronized boolean saveIngestRequest(IngestRequest ingestRequest)
       throws InvalidParseOperationException {
-    synchronized (FACTORY) {
-      File existingFile = new File(baseDir, ingestRequest.getJsonPath());
-      if (existingFile.canRead()) {
-        JsonHandler.writeAsFile(ingestRequest, existingFile);
-        return;
-      }
+    File existingFile = new File(baseDir, ingestRequest.getJsonPath());
+    if (existingFile.canRead()) {
+      JsonHandler.writeAsFile(ingestRequest, existingFile);
+      return true;
     }
     throw new InvalidParseOperationException("Json File does not exist");
   }
 
-  boolean removeIngestRequest(IngestRequest ingestRequest) {
+  /**
+   * Internal
+   *
+   * @param file
+   *
+   * @return true if done
+   */
+  private boolean deleteFile(File file) {
+    if (file.canRead()) {
+      try {
+        Files.delete(file.toPath());
+      } catch (IOException e) {
+        logger.warn("Cannot delete file", e);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Clean and remove all traces of this IngestRequest
+   *
+   * @param ingestRequest
+   *
+   * @return true if totally done
+   */
+  synchronized boolean removeIngestRequest(IngestRequest ingestRequest) {
     if (ingestRequest.getJsonPath() != null) {
       File existingFile = new File(baseDir, ingestRequest.getJsonPath());
-      boolean status = true;
-      if (existingFile.canRead()) {
-        status &= existingFile.delete();
-      }
+      boolean status = deleteFile(existingFile);
       // Vitam is supposed to take care of this
-      if (VITAM_TAKE_CARE_LOCAL_FILE) {
+      if (vitamTakeCareLocalFile) {
         File sourceFile = new File(ingestRequest.getPath());
-        if (sourceFile.canRead()) {
-          status &= sourceFile.delete();
-        }
+        status &= deleteFile(sourceFile);
       }
       // Delete the ATR file if any
       File xmlAtrFile = getXmlAtrFile(ingestRequest);
-      if (xmlAtrFile.canRead()) {
-        status &= xmlAtrFile.delete();
-      }
+      status &= deleteFile(xmlAtrFile);
       IngestRequest.IngestStep.endSessionMachineSate(ingestRequest.step);
+      // Ensure file are deleted there
+      while (existingFile.exists()) {
+        try {
+          FACTORY.wait(10);
+        } catch (InterruptedException ignore) {//NOSONAR
+          logger.debug(ignore);
+        }
+      }
       return status;
     }
     return false;
   }
 
+  /**
+   * @param ingestRequest
+   *
+   * @return the File pointer to the XML ATR file
+   */
   File getXmlAtrFile(IngestRequest ingestRequest) {
     return new File(workDir, ingestRequest.getJsonPath() + EXTENSION);
   }
 
-  List<IngestRequest> getExistingIngestFactory()
-      throws InvalidParseOperationException {
+  /**
+   * @return the list of existing IngestRequests. Some can be not ready or ended
+   */
+  synchronized List<IngestRequest> getExistingIngestFactory() {
     List<IngestRequest> list = new ArrayList<>();
-    try {
-      File[] files = baseDir.listFiles(JSON_ONLY);
-      if (files != null) {
-        for (File file : files) {
+    File[] files = baseDir.listFiles(JSON_ONLY);
+    if (files != null) {
+      for (File file : files) {
+        try {
           IngestRequest ingestRequest =
               JsonHandler.getFromFile(file, IngestRequest.class);
           list.add(ingestRequest);
+        } catch (InvalidParseOperationException ignored) {
+          // File could be deleted during read operation
+          SysErrLogger.FAKE_LOGGER.ignoreLog(ignored);
         }
       }
-      return list;
-    } catch (InvalidParseOperationException e) {
-      logger.error(e);
-      list.clear();
-      throw e;
     }
+    return list;
+  }
+
+  /**
+   * @param filename
+   *
+   * @return the IngestRequest if found
+   *
+   * @throws InvalidParseOperationException
+   */
+  synchronized IngestRequest getSpecificIngestRequest(String filename)
+      throws InvalidParseOperationException {
+    File file = new File(baseDir, filename);
+    if (file.exists()) {
+      return JsonHandler.getFromFile(file, IngestRequest.class);
+    }
+    throw new InvalidParseOperationException("Cannot find " + filename);
   }
 }

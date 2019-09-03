@@ -20,7 +20,7 @@
 
 package org.waarp.vitam.ingest;
 
-import com.google.common.base.Charsets;
+import fr.gouv.vitam.common.GlobalDataRest;
 import fr.gouv.vitam.common.LocalDateUtil;
 import fr.gouv.vitam.common.PropertiesUtils;
 import fr.gouv.vitam.common.client.VitamContext;
@@ -29,7 +29,6 @@ import fr.gouv.vitam.common.exception.VitamClientException;
 import fr.gouv.vitam.common.external.client.IngestCollection;
 import fr.gouv.vitam.common.i18n.VitamLogbookMessages;
 import fr.gouv.vitam.common.model.LocalFile;
-import fr.gouv.vitam.common.model.ProcessState;
 import fr.gouv.vitam.common.model.RequestResponse;
 import fr.gouv.vitam.common.model.RequestResponseOK;
 import fr.gouv.vitam.common.model.StatusCode;
@@ -37,11 +36,15 @@ import fr.gouv.vitam.common.stream.StreamUtils;
 import fr.gouv.vitam.ingest.external.api.exception.IngestExternalException;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
 import org.apache.commons.io.FileUtils;
+import org.waarp.common.database.exception.WaarpDatabaseException;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.openr66.client.SubmitTransfer;
 import org.waarp.openr66.database.DbConstantR66;
+import org.waarp.openr66.database.data.DbHostAuth;
+import org.waarp.openr66.database.data.DbTaskRunner;
 import org.waarp.openr66.protocol.configuration.Configuration;
+import org.waarp.openr66.protocol.exception.OpenR66ProtocolNoSslException;
 import org.waarp.openr66.protocol.utils.R66Future;
 
 import javax.ws.rs.core.Response;
@@ -56,12 +59,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import static java.nio.file.StandardCopyOption.*;
 import static org.waarp.vitam.ingest.IngestRequest.*;
 
+/**
+ * IngestManager is the central logic for Ingest management between Waarp and
+ * Vitam
+ */
 public class IngestManager {
   /**
    * Internal Logger
@@ -84,22 +89,39 @@ public class IngestManager {
       "#OUTCOME_DETAIL_MESSAGE#";
   private static final String ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR =
       "Issue since ingest packet produces an error";
+  protected static final String ERROR_MESSAGE = "{}\n\t{}";
 
-  private IngestManager() {
+  IngestManagerToWaarp ingestManagerToWaarp = new IngestManagerToWaarp();
+
+  IngestManager() {
     // Empty
   }
 
-  static void retryAllExistingFiles(
-      final IngestRequestFactory ingestRequestFactory,
-      final IngestExternalClient client) {
+  /**
+   * Get all existing IngestRequest and try to continue according to their
+   * status
+   *
+   * @param ingestRequestFactory
+   * @param client
+   * @param stopFile
+   */
+  void retryAllExistingFiles(final IngestRequestFactory ingestRequestFactory,
+                             final IngestExternalClient client, File stopFile) {
     try {
       List<IngestRequest> ingestRequests =
           ingestRequestFactory.getExistingIngestFactory();
       for (IngestRequest ingestRequest : ingestRequests) {
+        if (stopFile.exists()) {
+          return;
+        }
         logger.info("Will run {}", ingestRequest);
         while (runStep(ingestRequestFactory, client, ingestRequest)) {
           // Executing next step
-          logger.info("Will run {}", ingestRequest);
+          if (ingestRequest.getStep() == null) {
+            // END
+            break;
+          }
+          logger.debug("Will rerun {}", ingestRequest);
         }
       }
     } catch (InvalidParseOperationException e) {
@@ -109,46 +131,57 @@ public class IngestManager {
 
   }
 
-  private static boolean runStep(
-      final IngestRequestFactory ingestRequestFactory,
-      final IngestExternalClient client, final IngestRequest ingestRequest)
+  /**
+   * Rune next step for this IngestRequest
+   *
+   * @param ingestRequestFactory
+   * @param client
+   * @param ingestRequest
+   *
+   * @return true if it is possible to run again the next step for this
+   *     IngestRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private boolean runStep(final IngestRequestFactory ingestRequestFactory,
+                          final IngestExternalClient client,
+                          final IngestRequest ingestRequest)
       throws InvalidParseOperationException {
     IngestStep step = ingestRequest.getStep();
+    logger.debug("Step is {} from {}", step, ingestRequest);
     switch (step) {
       case STARTUP:
         // Ignore: request not ready for the manager
         break;
       case RETRY_INGEST:
         // restart from ingest
-        logger.info("Restart from Ingest: {}", ingestRequest);
+        logger.info("Start from Ingest: {}", ingestRequest);
         ingestLocally(ingestRequestFactory, ingestRequest, client);
         break;
       case RETRY_INGEST_ID:
         // restart once ingest accepted but no feedback yet
-        logger.info("Restart from Ingest Id: {}", ingestRequest);
+        logger.info("From Ingest Id: {}", ingestRequest);
         sendBackId(ingestRequestFactory, ingestRequest);
         break;
       case RETRY_ATR:
         // restart from ATR
-        logger.info("Restart from ATR: {}", ingestRequest);
+        logger.info("From ATR: {}", ingestRequest);
         getStatusOfATR(ingestRequestFactory, ingestRequest, client,
                        ingestRequest.getVitamContext());
         break;
       case RETRY_ATR_FORWARD:
         // Write back the content of the ATR through Waarp
-        File targetFile = ingestRequest.getAtrFile();
-        if (!sendBackInformation(ingestRequest, targetFile.getAbsolutePath())) {
-          // ATR already there but not sent, so retry
-          ingestRequest.setStep(IngestStep.RETRY_ATR_FORWARD, 0);
-        } else {
-          toDelete(ingestRequestFactory, ingestRequest);
-        }
+        logger.info("From ATR_FORWARD: {}", ingestRequest);
+        File targetFile = ingestRequest.getAtrFile(ingestRequestFactory);
+        sendATRFile(ingestRequestFactory, ingestRequest, targetFile);
         break;
       case ERROR:
+        logger.info("From Error: {}", ingestRequest);
         sendErrorBack(ingestRequestFactory, ingestRequest);
         break;
       case END:
         // To be deleted
+        logger.info("End of Ingest: {}", ingestRequest);
         toDelete(ingestRequestFactory, ingestRequest);
         break;
       default:
@@ -158,62 +191,89 @@ public class IngestManager {
     return newStep != IngestStep.END && newStep != step;
   }
 
-  static void ingestLocally(final IngestRequestFactory ingestRequestFactory,
-                            final IngestRequest ingestRequest,
-                            final IngestExternalClient client) {
+  /**
+   * Try to launch first step of Ingest (step 1)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param client
+   *
+   * @return True if OK
+   */
+  boolean ingestLocally(final IngestRequestFactory ingestRequestFactory,
+                        final IngestRequest ingestRequest,
+                        final IngestExternalClient client) {
     try {
       // Inform Vitam of an Ingest to proceed locally
+      ingestRequest.setStep(IngestStep.RETRY_INGEST, 0, ingestRequestFactory);
       VitamContext vitamContext = ingestRequest.getVitamContext();
       LocalFile localFile = ingestRequest.getLocalFile();
       RequestResponse requestResponse = client
           .ingestLocal(vitamContext, localFile, ingestRequest.getContextId(),
                        ingestRequest.getAction());
       if (!requestResponse.isOk()) {
+        String requestIdNew =
+            requestResponse.getHeaderString(GlobalDataRest.X_REQUEST_ID);
+        if (requestIdNew == null || requestIdNew.isEmpty()) {
+          requestIdNew = "FAKE_REQUEST_ID";
+        }
+        ingestRequest.setRequestId(requestIdNew);
         Status status = Status.fromStatusCode(requestResponse.getStatus());
         switch (status) {
           case SERVICE_UNAVAILABLE:
             // Should retry later on
-            logger.error("{}\n\t{}", "Issue since service or ATR unavailable",
-                         requestResponse);
-            ingestRequest.setStep(IngestStep.RETRY_INGEST, 0);
+            logger.warn(ERROR_MESSAGE, "Issue since service or ATR unavailable",
+                        requestResponse);
+            ingestRequest
+                .setStep(IngestStep.RETRY_INGEST, 0, ingestRequestFactory);
             break;
           default:
             // Very Bad: inform back of error
-            logger
-                .error("{}\n\t{}", ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR,
-                       requestResponse);
-            ingestRequest.setStep(IngestStep.ERROR, status.getStatusCode());
+            logger.error(ERROR_MESSAGE,
+                         ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR,
+                         requestResponse);
+            ingestRequest.setStep(IngestStep.ERROR, status.getStatusCode(),
+                                  ingestRequestFactory);
             // Will inform back of error which could not be fixed when reloaded
         }
         // Next step is RETRY or ERROR
-        return;
+        return false;
       }
       // Ingest sent and accepted
       RequestResponseOK responseOK = (RequestResponseOK) requestResponse;
       ingestRequest.setFromRequestResponse(responseOK);
 
-      // Log Debug only
-      checkFeedbackLog(ingestRequest, responseOK);
-
       // Inform back of ID whatever: could be the last step
-      sendBackId(ingestRequestFactory, ingestRequest);
+      return sendBackId(ingestRequestFactory, ingestRequest);
     } catch (InvalidParseOperationException e) {
       logger.error("FATAL: Issue since backup of request produces an error", e);
     } catch (IngestExternalException e) {
       logger.error(ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR, e);
       // Should retry ingest from the beginning
       try {
-        ingestRequest.setStep(IngestStep.RETRY_INGEST, 0);
+        ingestRequest.setStep(IngestStep.RETRY_INGEST, 0, ingestRequestFactory);
       } catch (InvalidParseOperationException ex) {
         // very bad
         logger.error("FATAL: Very bad since cannot save IngestRequest", ex);
       }
     }
+    return false;
   }
 
-  private static void sendBackId(
-      final IngestRequestFactory ingestRequestFactory,
-      final IngestRequest ingestRequest) throws InvalidParseOperationException {
+  /**
+   * Once IngestRequest started, send back the Id of the corresponding Vitam
+   * Ingest Id Operation (step 2)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   *
+   * @return True if done
+   *
+   * @throws InvalidParseOperationException
+   */
+  private boolean sendBackId(final IngestRequestFactory ingestRequestFactory,
+                             final IngestRequest ingestRequest)
+      throws InvalidParseOperationException {
     File idMessage = new File("/tmp/" + ingestRequest.getRequestId() + ".xml");
     try {
       String atr = buildAtrInternal(ingestRequest.getRequestId(),
@@ -226,32 +286,58 @@ public class IngestManager {
       } catch (IOException e) {
         // very bad, so retry later on
         logger.error("Very bad since cannot save pseudo ATR", e);
-        ingestRequest.setStep(IngestStep.RETRY_INGEST_ID, 0);
-        return;
+        ingestRequest
+            .setStep(IngestStep.RETRY_INGEST_ID, 0, ingestRequestFactory);
+        return false;
       }
-      if (sendBackInformation(ingestRequest, idMessage.getAbsolutePath())) {
+      ingestRequest
+          .setStep(IngestStep.RETRY_INGEST_ID, 0, ingestRequestFactory);
+      if (ingestManagerToWaarp
+          .sendBackInformation(ingestRequestFactory, ingestRequest,
+                               idMessage.getAbsolutePath())) {
         // Possibly (optional) waiting for ATR back or not
         if (ingestRequest.isCheckAtr()) {
-          ingestRequest.setStep(IngestStep.RETRY_ATR, 0);
+          ingestRequest.setStep(IngestStep.RETRY_ATR, 0, ingestRequestFactory);
         } else {
           // No ATR Back so Very end of this IngestRequest
           toDelete(ingestRequestFactory, ingestRequest);
         }
+        return true;
       } else {
         // Not sent, so retry later on
-        ingestRequest.setStep(IngestStep.RETRY_INGEST_ID, 0);
+        return false;
       }
     } finally {
-      idMessage.delete();
+      try {
+        Files.delete(idMessage.toPath());
+      } catch (IOException e) {
+        logger.debug("Temporary file not deleted {}",
+                     idMessage.getAbsolutePath());
+      }
     }
   }
 
-  private static void getStatusOfATR(
-      final IngestRequestFactory ingestRequestFactory,
-      final IngestRequest ingestRequest, final IngestExternalClient client,
-      final VitamContext vitamContext) throws InvalidParseOperationException {
+  /**
+   * Get the ATR (step 3 if allowed)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param client
+   * @param vitamContext
+   *
+   * @return True if OK
+   *
+   * @throws InvalidParseOperationException
+   */
+  boolean getStatusOfATR(final IngestRequestFactory ingestRequestFactory,
+                         final IngestRequest ingestRequest,
+                         final IngestExternalClient client,
+                         final VitamContext vitamContext)
+      throws InvalidParseOperationException {
     Response response = null;
     try {
+
+      ingestRequest.setStep(IngestStep.RETRY_ATR, 0, ingestRequestFactory);
       response = client
           .downloadObjectAsync(vitamContext, ingestRequest.getRequestId(),
                                IngestCollection.ARCHIVETRANSFERREPLY);
@@ -259,68 +345,234 @@ public class IngestManager {
       switch (status) {
         case OK:
           sendATR(ingestRequestFactory, ingestRequest, response);
-          return;
+          return true;
         case SERVICE_UNAVAILABLE:
         case NOT_FOUND:
           // Should retry later on
-          logger.error("Issue since service or ATR unavailable\n\t{}",
+          logger.debug("Service or ATR unavailable yet\n\t{}",
                        status.getReasonPhrase());
-          ingestRequest.setStep(IngestStep.RETRY_ATR, 0);
-          return;
+          return false;
         default:
-          // Very Bad: inform back of error??
-          logger.error("{}\n\t{}", ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR,
-                       status.getReasonPhrase());
-          ingestRequest.setStep(IngestStep.ERROR, response.getStatus());
+          // Very Bad: inform back of error
+          logger
+              .error(ERROR_MESSAGE, ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR,
+                     status.getReasonPhrase());
+          ingestRequest.setStep(IngestStep.ERROR, response.getStatus(),
+                                ingestRequestFactory);
       }
     } catch (VitamClientException e) {
-      logger.error("Issue since ingest client produces an error", e);
-      ingestRequest.setStep(IngestStep.RETRY_ATR, 0);
+      logger.warn("Issue since ingest client produces an error", e);
     } finally {
       // Shall read all InputStream
       StreamUtils.consumeAnyEntityAndClose(response);
     }
+    return false;
   }
 
-  private static void sendATR(final IngestRequestFactory ingestRequestFactory,
-                              final IngestRequest ingestRequest,
-                              final Response response)
+  /**
+   * Send the ATR back to the Waarp Partner, directly from step 3 (ingest ATR
+   * retrieve) (step 4)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param response
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendATR(final IngestRequestFactory ingestRequestFactory,
+                       final IngestRequest ingestRequest,
+                       final Response response)
       throws InvalidParseOperationException {
-    final InputStream inputStream = response.readEntity(InputStream.class);
-    // Write file to be forwarded
-    File targetFile = ingestRequest.getAtrFile();
-    Path target = targetFile.toPath();
-    try {
+    try (final InputStream inputStream = response
+        .readEntity(InputStream.class)) {
+      // Write file to be forwarded
+      File targetFile = ingestRequest.getAtrFile(ingestRequestFactory);
+      Path target = targetFile.toPath();
       Files.copy(inputStream, target, REPLACE_EXISTING);
+      // Write back the content of the ATR through Waarp
+      sendATRFile(ingestRequestFactory, ingestRequest, targetFile);
     } catch (IOException e) {
-      logger.error("File must be writable", e);
+      logger
+          .error("File must be writable or InputStream error during close", e);
       ingestRequest.setStep(IngestStep.ERROR,
-                            Status.INTERNAL_SERVER_ERROR.getStatusCode());
-      return;
+                            Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                            ingestRequestFactory);
     }
-    // Write back the content of the ATR through Waarp
-    if (!sendBackInformation(ingestRequest, targetFile.getAbsolutePath())) {
-      // ATR already there but not sent, so retry
-      ingestRequest.setStep(IngestStep.RETRY_ATR_FORWARD, 0);
-      return;
-    }
-    toDelete(ingestRequestFactory, ingestRequest);
   }
 
-  private static boolean sendBackInformation(final IngestRequest ingestRequest,
-                                             final String filename) {
-    R66Future future = new R66Future(true);
-    SubmitTransfer submitTransfer =
-        new SubmitTransfer(future, ingestRequest.getWaarpPartner(), filename,
-                           ingestRequest.getWaarpRule(),
-                           ingestRequest.getRequestId() + ':' +
-                           ingestRequest.getPath(), true,
-                           Configuration.configuration.getBlockSize(),
-                           DbConstantR66.ILLEGALVALUE, null);
-    submitTransfer.run();
-    future.awaitOrInterruptible();
-    return future.isSuccess();
+  /**
+   * Step to send ATR before finished (step 4)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param targetFile
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendATRFile(final IngestRequestFactory ingestRequestFactory,
+                           final IngestRequest ingestRequest,
+                           final File targetFile)
+      throws InvalidParseOperationException {
+    ingestRequest
+        .setStep(IngestStep.RETRY_ATR_FORWARD, 0, ingestRequestFactory);
+    if (!ingestManagerToWaarp
+        .sendBackInformation(ingestRequestFactory, ingestRequest,
+                             targetFile.getAbsolutePath())) {
+      // ATR already there but not sent, so retry
+      ingestRequest
+          .setStep(IngestStep.RETRY_ATR_FORWARD, 0, ingestRequestFactory);
+    } else {
+      toDelete(ingestRequestFactory, ingestRequest);
+    }
   }
+
+  /**
+   * Finalize IngestRequest, whatever Done or in Error (final step 5 in case
+   * of Done)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void toDelete(final IngestRequestFactory ingestRequestFactory,
+                        final IngestRequest ingestRequest)
+      throws InvalidParseOperationException {
+    // Ensure it will not be reloaded
+    ingestRequest.setStep(IngestStep.END, 0, ingestRequestFactory);
+    if (!ingestRequestFactory.removeIngestRequest(ingestRequest)) {
+      logger
+          .error("Issue while cleaning this IngestRequest: {}", ingestRequest);
+    } else {
+      logger.info("End of IngestRequest: {}", ingestRequest);
+    }
+  }
+
+  /**
+   * If in Error, will send back the status of the operation to the Waarp
+   * Partner before ending.
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendErrorBack(final IngestRequestFactory ingestRequestFactory,
+                             final IngestRequest ingestRequest)
+      throws InvalidParseOperationException {
+    logger.warn("Error to feedback since status not ok to restart: {}",
+                ingestRequest);
+    // Feedback through Waarp
+    File file = ingestRequest.getAtrFile(ingestRequestFactory);
+    if (!file.canRead()) {
+      // Create a pseudo one
+      String atr = buildAtrInternal(ingestRequest.getRequestId(),
+                                    "ArchivalAgencyToBeDefined",
+                                    "TransferringAgencyToBeDefined",
+                                    INGEST_INT_UPLOAD,
+                                    "(Issue during Ingest Step [" +
+                                    ingestRequest.getStatus() +
+                                    "] while Waarp accessed to Vitam)",
+                                    StatusCode.FATAL, LocalDateUtil.now());
+      try {
+        FileUtils.write(file, atr, StandardCharsets.UTF_8);
+      } catch (IOException e) {
+        // very bad
+        logger.error("Very bad since cannot save pseudo ATR", e);
+        return;
+      }
+    }
+    if (ingestManagerToWaarp
+        .sendBackInformation(ingestRequestFactory, ingestRequest,
+                             file.getAbsolutePath())) {
+      // Very end of this IngestRequest
+      toDelete(ingestRequestFactory, ingestRequest);
+    }
+    // else Since not sent, will retry later on: keep as is
+  }
+
+  /**
+   * Class to allow Mock of Waarp sending back to Waarp Partner
+   */
+  static class IngestManagerToWaarp {
+    IngestManagerToWaarp() {
+      // nothing
+    }
+
+    /**
+     * Launch a SubmitTransfer according to arguments
+     *
+     * @param ingestRequestFactory
+     * @param ingestRequest
+     * @param filename
+     *
+     * @return True if done
+     *
+     * @throws InvalidParseOperationException
+     */
+    boolean sendBackInformation(final IngestRequestFactory ingestRequestFactory,
+                                final IngestRequest ingestRequest,
+                                final String filename)
+        throws InvalidParseOperationException {
+      logger.debug("Will send {} while step is {}", filename,
+                   ingestRequest.getStep());
+      R66Future future = new R66Future(true);
+      SubmitTransfer submitTransfer =
+          new SubmitTransfer(future, ingestRequest.getWaarpPartner(), filename,
+                             ingestRequest.getWaarpRule(),
+                             ingestRequest.getRequestId() + ':' +
+                             ingestRequest.getPath(), true,
+                             Configuration.configuration.getBlockSize(),
+                             DbConstantR66.ILLEGALVALUE, null);
+      submitTransfer.run();
+      future.awaitOrInterruptible();
+      if (future.isSuccess()) {
+        ingestRequest.setWaarpId(future.getResult().getRunner().getSpecialId())
+                     .save(ingestRequestFactory);
+        return waitForAllDone(ingestRequest);
+      }
+      return false;
+    }
+
+    /**
+     * Ensure that SubmitTransfer is done totally (file sent) before continuing
+     *
+     * @param ingestRequest
+     *
+     * @return True if done
+     */
+    private boolean waitForAllDone(IngestRequest ingestRequest) {
+      while (true) {
+        try {
+          DbHostAuth dbHostAuth =
+              new DbHostAuth(ingestRequest.getWaarpPartner());
+          DbTaskRunner checkedRunner =
+              new DbTaskRunner(ingestRequest.getWaarpId(),
+                               Configuration.configuration
+                                   .getHostId(dbHostAuth.isSsl()),
+                               ingestRequest.getWaarpPartner());
+          if (checkedRunner.isAllDone()) {
+            logger.info("DbTaskRunner done");
+            return true;
+          } else if (checkedRunner.isInError()) {
+            logger.warn("DbTaskRunner in error for {}", ingestRequest);
+            return false;
+          }
+          Thread.sleep(500);
+        } catch (InterruptedException e) {//NOSONAR
+          logger.error("Interrupted", e);
+          return false;
+        } catch (WaarpDatabaseException e) {
+          logger.error("Cannot found DbTaskRunner", e);
+          return false;
+        } catch (OpenR66ProtocolNoSslException e) {
+          logger.error("Cannot found HostSslId", e);
+          return false;
+        }
+      }
+    }
+  }
+
 
   /**
    * To generate a default ATR KO from Ingest External on AV or MimeType checks.
@@ -345,6 +597,7 @@ public class IngestManager {
       xmlDefault = readInputStream(
           PropertiesUtils.getResourceAsStream(ATR_KO_DEFAULT_XML));
     } catch (final IOException e) {
+      // Should not be, but in case, get the String equivalent
       xmlDefault = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                    "<ArchiveTransferReply xmlns:xlink=\"http://www.w3.org/1999/xlink\"\n" +
                    " xmlns:pr=\"info:lc/xmlns/premis-v2\"\n" +
@@ -394,6 +647,8 @@ public class IngestManager {
   }
 
   /**
+   * Internal
+   *
    * @param input to read
    *
    * @return String
@@ -418,6 +673,8 @@ public class IngestManager {
   }
 
   /**
+   * Internal
+   *
    * @param input to read
    *
    * @return String
@@ -426,70 +683,6 @@ public class IngestManager {
    */
   private static String readInputStream(InputStream input) throws IOException {
     return readInputStreamLimited(input, Integer.MAX_VALUE);
-  }
-
-  private static void toDelete(final IngestRequestFactory ingestRequestFactory,
-                               final IngestRequest ingestRequest)
-      throws InvalidParseOperationException {
-    // Ensure it will not be reloaded
-    ingestRequest.setStep(IngestStep.END, 0);
-    if (!ingestRequestFactory.removeIngestRequest(ingestRequest)) {
-      logger
-          .error("Issue while cleaning this IngestRequest: {}", ingestRequest);
-    }
-  }
-
-  private static void sendErrorBack(
-      final IngestRequestFactory ingestRequestFactory,
-      final IngestRequest ingestRequest) throws InvalidParseOperationException {
-    logger.error("Error to feedback since status not ok to restart: {}",
-                 ingestRequest);
-    // Feedback through Waarp
-    File file = ingestRequest.getAtrFile();
-    if (!file.canRead()) {
-      // Create a pseudo one
-      String atr = buildAtrInternal(ingestRequest.getRequestId(),
-                                    "ArchivalAgencyToBeDefined",
-                                    "TransferringAgencyToBeDefined",
-                                    INGEST_INT_UPLOAD,
-                                    "(Issue during Ingest Step [" +
-                                    ingestRequest.getStatus() +
-                                    "] while Waarp accessed to Vitam)",
-                                    StatusCode.FATAL, LocalDateUtil.now());
-      try {
-        FileUtils.write(file, atr, Charsets.UTF_8);
-      } catch (IOException e) {
-        // very bad
-        logger.error("Very bad since cannot save pseudo ATR", e);
-        return;
-      }
-    }
-    if (sendBackInformation(ingestRequest, file.getAbsolutePath())) {
-      // Very end of this IngestRequest
-      toDelete(ingestRequestFactory, ingestRequest);
-    }
-    // else Since not sent, will retry later on: keep as is
-  }
-
-  private static void checkFeedbackLog(final IngestRequest ingestRequest,
-                                       final RequestResponseOK responseOK) {
-    if (logger.isDebugEnabled()) {
-      Map<String, String> vitamHeaders = responseOK.getVitamHeaders();
-      for (Entry<String, String> entry : vitamHeaders.entrySet()) {
-        logger.debug("{} = {}", entry.getKey(), entry.getValue());
-      }
-      ProcessState processState = ingestRequest.getProcessState();
-      if (processState != ProcessState.PAUSE) {
-        // Error
-        logger.warn("Not PAUSE: {}", ingestRequest.getGlobalExecutionState());
-      }
-      StatusCode statusCode = ingestRequest.getStatusCode();
-      if (statusCode != StatusCode.UNKNOWN) {
-        // Error
-        logger
-            .error("Not UNKNOWN: {}", ingestRequest.getGlobalExecutionStatus());
-      }
-    }
   }
 
 }

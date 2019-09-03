@@ -34,6 +34,7 @@ import fr.gouv.vitam.common.model.LocalFile;
 import fr.gouv.vitam.common.model.ProcessState;
 import fr.gouv.vitam.common.model.RequestResponseOK;
 import fr.gouv.vitam.common.model.StatusCode;
+import org.waarp.common.exception.IllegalFiniteStateException;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.state.MachineState;
@@ -43,14 +44,24 @@ import java.io.File;
 import java.util.EnumSet;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * IngestRequest is the unitary entry for Ingest operations made by Waarp to
+ * Vitam
+ */
 public class IngestRequest {
   /**
    * Internal Logger
    */
   private static final WaarpLogger logger =
       WaarpLoggerFactory.getLogger(IngestRequest.class);
+  /**
+   * Only kind of action supported by Vitam and Waarp
+   */
   static final String RESUME = "RESUME";
 
+  /**
+   * Context accepted by Vitam
+   */
   enum CONTEXT {
     /**
      * Sip ingest
@@ -75,6 +86,9 @@ public class IngestRequest {
     }
   }
 
+  /**
+   * Different steps of Ingest from Waarp point of view
+   */
   enum IngestStep {
     /**
      * IngestRequest not started yet
@@ -99,9 +113,9 @@ public class IngestRequest {
     /**
      * IngestRequest Error
      */
-    ERROR(-6),
+    ERROR(-7),
     /**
-     * Error step
+     * Final End step
      */
     END(-10);
 
@@ -121,7 +135,7 @@ public class IngestRequest {
       T_RETRY_INGEST_ID(RETRY_INGEST_ID, EnumSet.of(RETRY_ATR, ERROR, END)),
       T_RETRY_ATR(RETRY_ATR, EnumSet.of(RETRY_ATR_FORWARD, ERROR)),
       T_RETRY_ATR_FORWARD(RETRY_ATR_FORWARD, EnumSet.of(ERROR, END)),
-      T_ERROR(ERROR, EnumSet.of(END)), T_END(END, EnumSet.of(END));
+      T_ERROR(ERROR, EnumSet.of(ERROR, END)), T_END(END, EnumSet.of(END));
 
       private final Transition<IngestStep> elt;
 
@@ -178,7 +192,7 @@ public class IngestRequest {
           return RETRY_ATR_FORWARD;
         case -10:
           return END;
-        case -6:
+        case -7:
         default:
           return ERROR;
       }
@@ -216,13 +230,15 @@ public class IngestRequest {
   @JsonProperty("status")
   private int status;
   @JsonIgnore
-  MachineState<IngestStep> step = null;
+  MachineState<IngestStep> step = IngestStep.newSessionMachineState();
   @JsonProperty("jsonPath")
   private String jsonPath;
   @JsonProperty("waarpPartner")
   private String waarpPartner;
   @JsonProperty("waarpRule")
   private String waarpRule;
+  @JsonProperty("waarpId")
+  private long waarpId;
   @JsonProperty("checkAtr")
   private boolean checkAtr;
 
@@ -230,20 +246,40 @@ public class IngestRequest {
     // Empty constructor for Json
   }
 
+  /**
+   * Standard constructor
+   *
+   * @param path
+   * @param tenantId
+   * @param applicationSessionId
+   * @param personalCertificate
+   * @param accessContract
+   * @param contextId
+   * @param action
+   * @param waarpPartner
+   * @param waarpRule
+   * @param checkAtr
+   * @param factory
+   *
+   * @throws InvalidParseOperationException
+   */
   public IngestRequest(final String path, final int tenantId,
                        final String applicationSessionId,
                        final String personalCertificate,
                        final String accessContract, final String contextId,
                        final String action, final String waarpPartner,
-                       final String waarpRule, final boolean checkAtr)
+                       final String waarpRule, final boolean checkAtr,
+                       final IngestRequestFactory factory)
       throws InvalidParseOperationException {
     try {
       ParametersChecker
           .checkParameterDefault(getCheckMessage(), path, accessContract,
                                  contextId, action, waarpPartner, waarpRule);
-      StringUtils.checkSanityString(path, applicationSessionId, accessContract,
-                                    contextId, action, personalCertificate,
-                                    waarpPartner, waarpRule);
+      StringUtils.checkSanityString(path, applicationSessionId != null?
+                                        applicationSessionId : "", accessContract, contextId, action,
+                                    personalCertificate != null?
+                                        personalCertificate : "", waarpPartner,
+                                    waarpRule);
     } catch (InvalidParseOperationException | IllegalArgumentException e) {
       logger.error(e);
       throw new InvalidParseOperationException(e);
@@ -258,20 +294,19 @@ public class IngestRequest {
     this.waarpPartner = waarpPartner;
     this.waarpRule = waarpRule;
     this.checkAtr = checkAtr;
-    this.step = IngestStep.newSessionMachineState();
     this.status = this.step.getCurrent().getStatusMonitor();
     try {
-      IngestRequestFactory.getInstance().saveNewIngestRequest(this);
+      factory.saveNewIngestRequest(this);
     } catch (InvalidParseOperationException e) {
-      logger.error("Issue since IngestRequest cannot be saved", e);
-      logger.error("Will not be able to save: {}", this);
+      logger.error("Will not be able to save: {}", this, e);
       throw e;
     }
   }
 
   @Override
   public String toString() {
-    return JsonHandler.unprettyPrint(this);
+    return "Ingest = Step: " + (step != null? step.getCurrent() : "noStep") +
+           " " + JsonHandler.unprettyPrint(this);
   }
 
   @JsonGetter("path")
@@ -449,6 +484,17 @@ public class IngestRequest {
     return this;
   }
 
+  @JsonGetter("waarpId")
+  public long getWaarpId() {
+    return waarpId;
+  }
+
+  @JsonSetter("waarpId")
+  public IngestRequest setWaarpId(final long waarpId) {
+    this.waarpId = waarpId;
+    return this;
+  }
+
   @JsonGetter("requestId")
   public String getRequestId() {
     return requestId;
@@ -523,28 +569,83 @@ public class IngestRequest {
     return status;
   }
 
+  /**
+   * Set the status AND the step according to the value of the status (if
+   * less than 0, it is a step value, not a final status), but in dry mode
+   * (no check, used by Json deserialization)
+   *
+   * @param status
+   *
+   * @return this
+   */
   @JsonSetter("status")
   public IngestRequest setStatus(final int status) {
     this.status = status;
-    if (step == null) {
-      step = IngestStep.newSessionMachineState();
+    if (step != null) {
       step.setDryCurrent(IngestStep.getFromInt(status));
     }
     return this;
   }
 
+  /**
+   * Use to set the step and status accordingly.
+   *
+   * @param step
+   * @param status
+   * @param factory
+   *
+   * @return this
+   *
+   * @throws InvalidParseOperationException
+   */
   @JsonIgnore
-  public IngestRequest setStep(final IngestStep step, final int status)
+  public IngestRequest setStep(final IngestStep step, final int status,
+                               IngestRequestFactory factory)
       throws InvalidParseOperationException {
+    if (this.step == null) {
+      if (!step.equals(IngestStep.END)) {
+        logger.debug("Step {} could not be set since IngestRequest done", step);
+      }
+      // Nothing to do since already done
+      return this;
+    }
+    if (!step.equals(IngestStep.ERROR) && this.step.getCurrent().equals(step)) {
+      // nothing to do
+      return this;
+    }
+    try {
+      this.step.setCurrent(step);
+    } catch (IllegalFiniteStateException e) {
+      logger.error(e);
+      this.step.setDryCurrent(step);
+    }
     setStatus(step != IngestStep.ERROR? step.getStatusMonitor() : status)
         .setLastTryTime(System.currentTimeMillis());
-    IngestRequestFactory.getInstance().saveIngestRequest(this);
-    return this;
+    return save(factory);
   }
 
   @JsonIgnore
   public IngestStep getStep() {
+    if (step == null) {
+      return null;
+    }
     return step.getCurrent();
+  }
+
+  /**
+   * Save this IngestRequest
+   *
+   * @param factory
+   *
+   * @return this
+   *
+   * @throws InvalidParseOperationException
+   */
+  @JsonIgnore
+  public IngestRequest save(IngestRequestFactory factory)
+      throws InvalidParseOperationException {
+    factory.saveIngestRequest(this);
+    return this;
   }
 
   @JsonGetter("jsonPath")
@@ -576,6 +677,13 @@ public class IngestRequest {
     return this;
   }
 
+  /**
+   * Set extra information from first response from Ingest submission
+   *
+   * @param requestResponse
+   *
+   * @return this
+   */
   @JsonIgnore
   public IngestRequest setFromRequestResponse(
       RequestResponseOK requestResponse) {
@@ -601,6 +709,9 @@ public class IngestRequest {
     return this;
   }
 
+  /**
+   * @return the VitamContext according to this
+   */
   @JsonIgnore
   public VitamContext getVitamContext() {
     return new VitamContext(tenantId)
@@ -609,14 +720,20 @@ public class IngestRequest {
         .setAccessContract(accessContract);
   }
 
+  /**
+   * @return the LocalFile according to this
+   */
   @JsonIgnore
   public LocalFile getLocalFile() {
     return new LocalFile(path);
   }
 
+  /**
+   * @return the ATR File pointer according to this
+   */
   @JsonIgnore
-  public File getAtrFile() {
-    return IngestRequestFactory.getInstance().getXmlAtrFile(this);
+  public File getAtrFile(IngestRequestFactory factory) {
+    return factory.getXmlAtrFile(this);
   }
 
   @JsonIgnore
@@ -634,7 +751,7 @@ public class IngestRequest {
           ProcessState.valueOf(globalExecutionState);
       if (processState != ProcessState.PAUSE) {
         // Error
-        logger.error("Not PAUSE: {}", globalExecutionState);
+        logger.warn("Not PAUSE: {}", globalExecutionState);
       }
       return processState;
     } catch (IllegalArgumentException ignored) {
@@ -658,7 +775,7 @@ public class IngestRequest {
       final StatusCode statusCode = StatusCode.valueOf(globalExecutionStatus);
       if (statusCode != StatusCode.UNKNOWN) {
         // Error
-        logger.error("Not UNKNOWN: {}", globalExecutionStatus);
+        logger.warn("Not UNKNOWN: {}", globalExecutionStatus);
       }
       return statusCode;
     } catch (IllegalArgumentException ignored) {
