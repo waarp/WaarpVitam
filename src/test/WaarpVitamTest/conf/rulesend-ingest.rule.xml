@@ -1,0 +1,86 @@
+<!--
+  ~ This file is part of Waarp Project (named also Waarp or GG).
+  ~
+  ~  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+  ~  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+  ~ individual contributors.
+  ~
+  ~  All Waarp Project is free software: you can redistribute it and/or
+  ~ modify it under the terms of the GNU General Public License as published by
+  ~ the Free Software Foundation, either version 3 of the License, or (at your
+  ~ option) any later version.
+  ~
+  ~ Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+  ~ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+  ~ A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+  ~
+  ~  You should have received a copy of the GNU General Public License along with
+  ~ Waarp . If not, see <http://www.gnu.org/licenses/>.
+  -->
+
+<rule>
+	<idrule>send-ingest</idrule>
+	<mode>1</mode>
+	<recvpath></recvpath>
+	<sendpath></sendpath>
+	<archivepath></archivepath>
+	<workpath></workpath>
+	<rposttasks>
+		<tasks>
+			<task>
+				<type>LOG</type>
+				<path>one or the other: EXECJAVA or EXEC</path>
+				<delay>0</delay>
+				<rank>0</rank>
+			</task>
+			<task>
+				<type>MOVE</type>
+				<path>/vitam/data/ingest-external/upload/</path>
+				<delay>0</delay>
+				<rank>1</rank>
+			</task>
+			<task>
+				<type>EXECJAVA</type>
+				<path>org.waarp.vitam.ingest.IngestTask$JavaTask -o %ROOT%/conf/config-ingest.property -w %ROOT%/conf/config-clientSubmitA.xml -k -x DEFAULT_WORKFLOW -f #TRUEFILENAME#</path>
+				<delay>0</delay>
+				<rank>2</rank>
+			</task>
+			<taskno>
+				<type>EXEC</type>
+				<path>java -cp %ROOT%/bin/Waarp-Vitam-Ingest-3.2.0-jar-with-dependencies.jar -Dvitam.tmp.folder=%ROOT%/work -Dvitam.config.folder=%ROOT%/conf/vitam -Dvitam.data.folder=%ROOT%/data -Dvitam.log.folder=%ROOT%/log org.waarp.vitam.ingest.IngestTask -o %ROOT%/conf/config-ingest.property -w %ROOT%/conf/config-clientSubmitA.xml -k -x DEFAULT_WORKFLOW -f #TRUEFULLPATH#</path>
+				<delay>0</delay>
+				<rank>2</rank>
+			</taskno>
+		</tasks>
+	</rposttasks>
+	<rerrortasks>
+		<tasks>
+			<task>
+				<type>LOG</type>
+				<path>error of transmission</path>
+				<delay>1</delay>
+				<rank>0</rank>
+			</task>
+		</tasks>
+	</rerrortasks>
+	<sposttasks>
+		<tasks>
+			<task>
+				<type>LOG</type>
+				<path>here comes post task when send is done</path>
+				<delay>0</delay>
+				<rank>0</rank>
+			</task>
+		</tasks>
+	</sposttasks>
+	<serrortasks>
+		<tasks>
+			<task>
+				<type>LOG</type>
+				<path>error of transmission</path>
+				<delay>1</delay>
+				<rank>0</rank>
+			</task>
+		</tasks>
+	</serrortasks>
+</rule>

@@ -24,12 +24,14 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>Waarp</groupId>
-  <artifactId>Waarp-Vitam-Ingest</artifactId>
+  <artifactId>Waarp-Vitam</artifactId>
   <version>${revision}</version>
   <packaging>jar</packaging>
-  <name>Waarp Vitam Ingest</name>
+  <name>Waarp Vitam Module</name>
 
   <inceptionYear>2019</inceptionYear>
+  <description>Waarp integration for Vitam, for Ingest (upload) of SIP and for
+    export of DIP</description>
   <organization>
     <name>Waarp</name>
     <url>http://www.waarp.fr</url>
@@ -182,7 +184,7 @@
     <!-- Sonar -->
     <sonar.core.codeCoveragePlugin>jacoco</sonar.core.codeCoveragePlugin>
     <jacoco-maven-plugin.version>0.8.4</jacoco-maven-plugin.version>
-    <sonar-maven-plugin.version>3.6.0.1398</sonar-maven-plugin.version>
+    <sonar-maven-plugin.version>3.6.1.1688</sonar-maven-plugin.version>
     <sonar.sources>src/main/java</sonar.sources>
     <sonar.tests>src/test/java</sonar.tests>
     <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
@@ -220,11 +222,12 @@
     <waarp.directory.version>test</waarp.directory.version>
     <waarp.module.version>test</waarp.module.version>
     <waarp.version>3.2.0</waarp.version>
-    <revision>${waarp.version}</revision>
+    <waarp-vitam.version>1.0.0</waarp-vitam.version>
+    <revision>${waarp-vitam.version}</revision>
 
     <!-- Dependencies versions -->
     <vitam.version>2.6.3-1</vitam.version>
-    <netty.version>4.1.39.Final</netty.version>
+    <netty.version>4.1.41.Final</netty.version>
     <netty-tcnative.version>2.0.25.Final</netty-tcnative.version>
     <slf4j.version>1.7.26</slf4j.version>
     <logback.version>1.2.3</logback.version>
@@ -232,7 +235,7 @@
     <commons.daemon.version>1.2.0</commons.daemon.version>
     <commons.io.version>2.6</commons.io.version>
     <commons.dbcp.version>1.4</commons.dbcp.version>
-    <commons.pool.version>2.6.2</commons.pool.version>
+    <commons.pool.version>2.5.0</commons.pool.version>
     <commons-exec.version>1.3</commons-exec.version>
     <commons-logging.version>1.2</commons-logging.version>
     <commons-net.version>3.6</commons-net.version>
@@ -275,7 +278,7 @@
     <maven.assembly.version>3.1.1</maven.assembly.version><!-- 2.4 -->
     <maven.javadoc.version>3.1.1</maven.javadoc.version><!-- 2.8.1 -->
     <maven.exec.version>1.6.0</maven.exec.version>
-    <maven.dependencycheck.version>5.2.0</maven.dependencycheck.version>
+    <maven.dependencycheck.version>5.2.1</maven.dependencycheck.version>
     <maven-jxr-plugin.version>3.0.0</maven-jxr-plugin.version><!-- 2.5 3.0.0 -->
     <maven-project-info-reports-plugin.version>3.0.0
     </maven-project-info-reports-plugin.version>
@@ -293,14 +296,14 @@
     <maven-enforcer-plugin.version>3.0.0-M2
     </maven-enforcer-plugin.version><!-- 1.3.1 -->
     <versions-maven-plugin.version>2.7</versions-maven-plugin.version>
-    <animal-sniffer-maven-plugin.version>1.16
-    </animal-sniffer-maven-plugin.version>
+    <animal-sniffer-maven-plugin.version>1.18</animal-sniffer-maven-plugin.version>
     <ant.version>1.10.6</ant.version><!-- 1.8.2 -->
     <apiviz.version>1.3.4</apiviz.version>
     <maven-shade-plugin>3.2.1</maven-shade-plugin>
     <buildToolsVersion>1.3</buildToolsVersion>
     <coberturaMavenPluginVersion>2.7</coberturaMavenPluginVersion>
     <flatten-maven.version>1.1.0</flatten-maven.version>
+    <spotbugs-maven-plugin-version>3.1.12.2</spotbugs-maven-plugin-version>
   </properties>
 
   <build>
@@ -856,7 +859,7 @@
       <plugin>
         <groupId>com.github.spotbugs</groupId>
         <artifactId>spotbugs-maven-plugin</artifactId>
-        <version>3.1.12.1</version>
+        <version>${spotbugs-maven-plugin-version}</version>
         <dependencies>
           <!-- overwrite dependency on spotbugs if you want to specify the version of spotbugs -->
           <dependency>
@@ -881,8 +884,7 @@
             <plugin>
               <groupId>com.h3xstream.findsecbugs</groupId>
               <artifactId>findsecbugs-plugin</artifactId>
-              <version>LATEST
-              </version> <!-- Auto-update to the latest stable -->
+              <version>LATEST</version> <!-- Auto-update to the latest stable -->
             </plugin>
             <plugin>
               <groupId>com.mebigfatguy.sb-contrib</groupId>
@@ -1156,6 +1158,12 @@
           <reportSet>
             <configuration>
               <attach>false</attach>
+              <doclet>org.jboss.apiviz.APIviz</doclet>
+              <docletArtifact>
+                <groupId>com.grahamedgecombe.apiviz</groupId>
+                <artifactId>apiviz</artifactId>
+                <version>${apiviz.version}</version>
+              </docletArtifact>
               <useStandardDocletOptions>true</useStandardDocletOptions>
               <charset>UTF-8</charset>
               <docencoding>UTF-8</docencoding>
@@ -1303,7 +1311,51 @@
       </dependency>
       <dependency>
         <groupId>fr.gouv.vitam</groupId>
+        <artifactId>access-external-client</artifactId>
+        <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
+        </exclusions>
+        <version>${vitam.version}</version>
+      </dependency>
+      <!-- ########## Vitam for Test ****************** -->
+      <dependency>
+        <groupId>fr.gouv.vitam</groupId>
         <artifactId>ingest-external-rest</artifactId>
+        <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-s3</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.elasticsearch</groupId>
+            <artifactId>elasticsearch</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.elasticsearch.client</groupId>
+            <artifactId>transport</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>fr.gouv.vitam</groupId>
+            <artifactId>common-dsl-schema</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+          </exclusion>
+        </exclusions>
+        <version>${vitam.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>fr.gouv.vitam</groupId>
+        <artifactId>access-external-rest</artifactId>
         <exclusions>
           <exclusion>
             <groupId>com.google.guava</groupId>
@@ -1539,6 +1591,10 @@
       <artifactId>ingest-external-client</artifactId>
     </dependency>
     <dependency>
+      <groupId>fr.gouv.vitam</groupId>
+      <artifactId>access-external-client</artifactId>
+    </dependency>
+    <dependency>
       <groupId>commons-cli</groupId>
       <artifactId>commons-cli</artifactId>
     </dependency>
@@ -1560,6 +1616,11 @@
     <dependency>
       <groupId>fr.gouv.vitam</groupId>
       <artifactId>ingest-external-rest</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>fr.gouv.vitam</groupId>
+      <artifactId>access-external-rest</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

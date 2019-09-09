@@ -19,27 +19,27 @@
   -->
 
 <rule>
-	<idrule>send</idrule>
+	<idrule>send-dipfeedback</idrule>
 	<mode>1</mode>
 	<recvpath></recvpath>
 	<sendpath></sendpath>
 	<archivepath></archivepath>
 	<workpath></workpath>
-	<rpretasks>
-		<tasks>
-			<task>
-				<type>LOG</type>
-				<path>mon info</path>
-				<delay>0</delay>
-				<rank>0</rank>
-			</task>
-		</tasks>
-	</rpretasks>
 	<rposttasks>
 		<tasks>
 			<task>
 				<type>LOG</type>
-				<path>petittest</path>
+				<path>here comes when feedback is done: fileinfo starts always with the
+					DipRequestId, then either
+					DIP_FAILED: content is a failed DIP,
+					DIP: content is the DIP of the request</path>
+				<delay>0</delay>
+				<rank>0</rank>
+			</task>
+			<task>
+				<type>LOG</type>
+				<path>Note: since postfix of fileinfo is separated, one can use
+					the very same rule for sending back Ingest or Dip results</path>
 				<delay>0</delay>
 				<rank>0</rank>
 			</task>
@@ -49,7 +49,7 @@
 		<tasks>
 			<task>
 				<type>LOG</type>
-				<path>erreur</path>
+				<path>error during transmission</path>
 				<delay>1</delay>
 				<rank>0</rank>
 			</task>
@@ -59,7 +59,7 @@
 		<tasks>
 			<task>
 				<type>LOG</type>
-				<path>erreur</path>
+				<path>error during transmission</path>
 				<delay>1</delay>
 				<rank>0</rank>
 			</task>

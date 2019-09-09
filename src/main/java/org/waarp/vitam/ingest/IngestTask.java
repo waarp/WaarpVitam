@@ -26,14 +26,16 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.utility.Version;
 import org.waarp.openr66.configuration.FileBasedConfiguration;
+import org.waarp.openr66.context.task.AbstractExecJavaTask;
 import org.waarp.openr66.protocol.configuration.Configuration;
+import org.waarp.vitam.WaarpCommon;
+import org.waarp.vitam.WaarpCommon.TaskOption;
 
 import java.io.File;
 
@@ -48,6 +50,7 @@ public class IngestTask {
   private static final WaarpLogger logger =
       WaarpLoggerFactory.getLogger(IngestTask.class);
   private static File waarpConfigurationFile;
+  private static int statusMain;
   private final String path;
   private final int tenantId;
   private final String applicationSessionId;
@@ -100,29 +103,69 @@ public class IngestTask {
   }
 
   /**
+   * Will try to start the IngestTask according to arguments, else print
+   * the help message
+   *
+   * @param args
+   */
+  public static void main(String[] args) {
+    Options options = getOptions();
+
+    if (args.length == 0 || WaarpCommon.checkHelp(args)) {
+      printHelp(options);
+      statusMain = 2;
+      return;
+    }
+    final IngestTask ingestTask;
+    try {
+      ingestTask = getIngestTask(options, args);
+    } catch (ParseException e) {
+      logger
+          .error("Error while initializing " + IngestTask.class.getSimpleName(),
+                 e);
+      printHelp(options);
+      statusMain = 2;
+      return;
+    }
+    if (!FileBasedConfiguration
+        .setSubmitClientConfigurationFromXml(Configuration.configuration,
+                                             waarpConfigurationFile
+                                                 .getAbsolutePath())) {
+      logger.error("Cannot load Waarp Configuration");
+      statusMain = 2;
+      return;
+    }
+    statusMain = ingestTask.invoke();
+  }
+
+  /**
    * Define the options associated
    *
    * @return the Options
    */
   private static Options getOptions() {
     Options options = new Options();
-    options.addRequiredOption("f", "file", true, "Path of the local file")
-           .addOption(Option.builder("t").longOpt("tenant").hasArg(true)
-                            .type(Number.class).desc("Tenant Id").required(true)
-                            .build())
-           .addRequiredOption("a", "access", true, "Access Contract")
-           .addRequiredOption("x", "context", true, "Context Id, shall be one" +
-                                                    " of DEFAULT_WORKFLOW, HOLDING_SCHEME, FILING_SCHEME")
-           .addRequiredOption("p", "partner", true, "Waarp Partner")
-           .addRequiredOption("r", "rule", true, "Waarp Rule")
-           .addRequiredOption("w", "waarp", true, "Waarp configuration file")
+    TaskOption.setStandardTaskOptions(options);
+    options.addOption("x", "context", true, "Context Id, shall be one" +
+                                            " of DEFAULT_WORKFLOW (default), " +
+                                            "HOLDING_SCHEME, FILING_SCHEME")
            .addOption("k", "checkatr", false, "If set, after RequestId sent, " +
                                               "will check for ATR if first step is ok")
-           .addOption("s", "session", true, "Application Session Id")
-           .addOption("c", "certificate", true, "Personal Certificate")
            .addOption("n", "action", true, "Action, shall be always RESUME");
     options.addOption(IngestRequestFactory.getDirectoryOption());
     return options;
+  }
+
+  /**
+   * Helper to print help
+   *
+   * @param options
+   */
+  private static void printHelp(Options options) {
+    HelpFormatter formatter = new HelpFormatter();
+    formatter.printHelp(IngestTask.class.getSimpleName(),
+                        "Version: " + Version.fullIdentifier(), options,
+                        WaarpCommon.FOR_MANDATORY_ARGUMENTS, true);
   }
 
   /**
@@ -140,105 +183,31 @@ public class IngestTask {
     CommandLineParser parser = new DefaultParser();
     CommandLine cmd = parser.parse(options, args);
     IngestRequestFactory.parseDirectoryOption(cmd);
-    final String path = cmd.getOptionValue('f');
-    final String accessContract = cmd.getOptionValue('a');
-    final String waarpPartner = cmd.getOptionValue('p');
-    final String waarpRule = cmd.getOptionValue('r');
-    final String contextId = cmd.getOptionValue('x');
+    final String contextId = cmd.getOptionValue('x', "DEFAULT_WORKFLOW");
     if (!IngestRequest.CONTEXT.checkCorrectness(contextId)) {
       throw new ParseException(
           "Context should be one of DEFAULT_WORKFLOW (Sip ingest), " +
           "HOLDING_SCHEME (tree) or FILING_SCHEME");
     }
     final String action = cmd.getOptionValue('n', IngestRequest.RESUME);
-    final String applicationSessionId;
-    if (cmd.hasOption('s')) {
-      String temp = cmd.getOptionValue('s');
-      if (temp.isEmpty()) {
-        temp = null;
-      }
-      applicationSessionId = temp;
-    } else {
-      applicationSessionId = null;
-    }
-    final String personalCertificate;
-    if (cmd.hasOption('c')) {
-      String temp = cmd.getOptionValue('c');
-      if (temp.isEmpty()) {
-        temp = null;
-      }
-      personalCertificate = temp;
-    } else {
-      personalCertificate = null;
-    }
-    final String stenant = cmd.getOptionValue('t');
-    final int tenantId;
-    try {
-      tenantId = Integer.parseInt(stenant);
-      if (tenantId < 0) {
-        throw new NumberFormatException("Tenant Id must be positive");
-      }
-    } catch (NumberFormatException e) {
-      throw new ParseException("Tenant Id must be a positive integer");
-    }
-    final String waarpConfiguration = cmd.getOptionValue('w');
-    waarpConfigurationFile = new File(waarpConfiguration);
-    return new IngestTask(path, tenantId, applicationSessionId,
-                          personalCertificate, accessContract, contextId,
-                          action, waarpPartner, waarpRule, cmd.hasOption('k'),
+    TaskOption taskOption = TaskOption.getTaskOption(cmd, args);
+    waarpConfigurationFile = new File(taskOption.getWaarpConfigurationFile());
+    return new IngestTask(taskOption.getPath(), taskOption.getTenantId(),
+                          taskOption.getApplicationSessionId(),
+                          taskOption.getPersonalCertificate(),
+                          taskOption.getAccessContract(), contextId, action,
+                          taskOption.getWaarpPartner(),
+                          taskOption.getWaarpRule(), cmd.hasOption('k'),
                           IngestRequestFactory.getInstance(),
                           new IngestManager());
   }
 
   /**
-   * Helper to print help
-   *
-   * @param options
-   */
-  private static void printHelp(Options options) {
-    HelpFormatter formatter = new HelpFormatter();
-    formatter.printHelp(IngestTask.class.getSimpleName(),
-                        "Version: " + Version.fullIdentifier(), options, "",
-                        true);
-  }
-
-  /**
-   * Will try to start the IngestTask according to arguments, else print
-   * the help message
-   *
-   * @param args
-   */
-  public static void main(String[] args) {
-    Options options = getOptions();
-
-    if (args.length == 0) {
-      printHelp(options);
-      return;
-    }
-    final IngestTask ingestTask;
-    try {
-      ingestTask = getIngestTask(options, args);
-    } catch (ParseException e) {
-      logger
-          .error("Error while initializing " + IngestTask.class.getSimpleName(),
-                 e);
-      printHelp(options);
-      return;
-    }
-    if (!FileBasedConfiguration
-        .setSubmitClientConfigurationFromXml(Configuration.configuration,
-                                             waarpConfigurationFile
-                                                 .getAbsolutePath())) {
-      logger.error("Cannot load Waarp Configuration");
-      return;
-    }
-    ingestTask.invoke();
-  }
-
-  /**
    * Launch the IngestMonitor
+   *
+   * @return 0 if OK, 1 if Warning, 2 if error
    */
-  public boolean invoke() {
+  public int invoke() {
     try (IngestExternalClient client = factory.getClient()) {
       IngestRequest ingestRequest =
           new IngestRequest(path, tenantId, applicationSessionId,
@@ -248,6 +217,18 @@ public class IngestTask {
     } catch (InvalidParseOperationException e) {
       logger.error("Issue since IngestRequest cannot be saved", e);
     }
-    return false;
+    return 2;
+  }
+
+  /**
+   * Equivalent JavaTask
+   */
+  public static class JavaTask extends AbstractExecJavaTask {
+    @Override
+    public void run() {
+      final String[] args = BLANK.split(fullarg);
+      main(args);
+      status = statusMain;
+    }
   }
 }

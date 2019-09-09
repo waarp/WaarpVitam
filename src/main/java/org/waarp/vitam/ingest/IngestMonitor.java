@@ -20,12 +20,13 @@
 
 package org.waarp.vitam.ingest;
 
+import fr.gouv.vitam.access.external.client.AdminExternalClient;
+import fr.gouv.vitam.access.external.client.AdminExternalClientFactory;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.waarp.common.logging.WaarpLogger;
@@ -33,6 +34,8 @@ import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.utility.Version;
 import org.waarp.openr66.configuration.FileBasedConfiguration;
 import org.waarp.openr66.protocol.configuration.Configuration;
+import org.waarp.vitam.WaarpCommon;
+import org.waarp.vitam.WaarpCommon.MonitorOption;
 
 import java.io.File;
 
@@ -51,6 +54,7 @@ public class IngestMonitor {
   private final File stopFile;
   private final IngestRequestFactory factory;
   private final IngestManager ingestManager;
+  private final AdminExternalClientFactory adminFactory;
 
   /**
    * Unique constructor
@@ -60,78 +64,15 @@ public class IngestMonitor {
    * @param factory
    * @param ingestManager
    */
-  public IngestMonitor(final long elapseTime, final File stopFile,
-                       final IngestRequestFactory factory,
-                       final IngestManager ingestManager) {
+  IngestMonitor(final long elapseTime, final File stopFile,
+                final IngestRequestFactory factory,
+                final AdminExternalClientFactory adminFactory,
+                final IngestManager ingestManager) {
     this.elapseTime = elapseTime;
     this.stopFile = stopFile;
     this.factory = factory;
+    this.adminFactory = adminFactory;
     this.ingestManager = ingestManager;
-  }
-
-  /**
-   * Define the options associated
-   *
-   * @return the Options
-   */
-  private static Options getOptions() {
-    Options options = new Options();
-    options.addRequiredOption("s", "stopfile", true, "Path of the stop file")
-           .addRequiredOption("w", "waarp", true, "Waarp configuration file")
-           .addOption(Option.builder("e").longOpt("elapse").hasArg(true)
-                            .type(Number.class).desc("Elapse time in seconds")
-                            .build());
-    options.addOption(IngestRequestFactory.getDirectoryOption());
-    return options;
-  }
-
-  /**
-   * Build the IngestMonitor according to arguments
-   *
-   * @param options
-   * @param args
-   *
-   * @return the new IngestMonitor
-   *
-   * @throws ParseException
-   */
-  private static IngestMonitor getIngestMonitor(Options options, String[] args)
-      throws ParseException {
-    CommandLineParser parser = new DefaultParser();
-    CommandLine cmd = parser.parse(options, args);
-    IngestRequestFactory.parseDirectoryOption(cmd);
-    final String stopFilePath = cmd.getOptionValue('s');
-    final String waarpConfiguration = cmd.getOptionValue('w');
-    final int elapseInSecond;
-    if (cmd.hasOption('e')) {
-      final String selapse = cmd.getOptionValue('e');
-      try {
-        elapseInSecond = Integer.parseInt(selapse);
-        if (elapseInSecond < 1) {
-          throw new NumberFormatException("Elapse time must be positive");
-        }
-      } catch (NumberFormatException e) {
-        throw new ParseException("Elapse time must be a positive integer");
-      }
-    } else {
-      elapseInSecond = 10;
-    }
-    waarpConfigurationFile = new File(waarpConfiguration);
-    return new IngestMonitor(elapseInSecond * 1000L, new File(stopFilePath),
-                             IngestRequestFactory.getInstance(),
-                             new IngestManager());
-  }
-
-  /**
-   * Helper to print help
-   *
-   * @param options
-   */
-  private static void printHelp(Options options) {
-    HelpFormatter formatter = new HelpFormatter();
-    formatter.printHelp(IngestMonitor.class.getSimpleName(),
-                        "Version: " + Version.fullIdentifier(), options, "",
-                        true);
   }
 
   /**
@@ -143,7 +84,7 @@ public class IngestMonitor {
   public static void main(String[] args) {
     Options options = getOptions();
 
-    if (args.length == 0) {
+    if (args.length == 0 || WaarpCommon.checkHelp(args)) {
       printHelp(options);
       return;
     }
@@ -167,13 +108,66 @@ public class IngestMonitor {
   }
 
   /**
+   * Define the options associated
+   *
+   * @return the Options
+   */
+  private static Options getOptions() {
+    Options options = new Options();
+    MonitorOption.setStandardMonitorOptions(options);
+    MonitorOption.addRetryMonitorOptions(options);
+    options.addOption(IngestRequestFactory.getDirectoryOption());
+    return options;
+  }
+
+  /**
+   * Helper to print help
+   *
+   * @param options
+   */
+  private static void printHelp(Options options) {
+    HelpFormatter formatter = new HelpFormatter();
+    formatter.printHelp(IngestMonitor.class.getSimpleName(),
+                        "Version: " + Version.fullIdentifier(), options,
+                        WaarpCommon.FOR_SIMPLE_MANDATORY_ARGUMENTS, true);
+  }
+
+  /**
+   * Build the IngestMonitor according to arguments
+   *
+   * @param options
+   * @param args
+   *
+   * @return the new IngestMonitor
+   *
+   * @throws ParseException
+   */
+  private static IngestMonitor getIngestMonitor(Options options, String[] args)
+      throws ParseException {
+    CommandLineParser parser = new DefaultParser();
+    CommandLine cmd = parser.parse(options, args);
+    IngestRequestFactory.parseDirectoryOption(cmd);
+    MonitorOption monitorOption =
+        WaarpCommon.MonitorOption.gestMonitorOption(cmd, args);
+    waarpConfigurationFile = new File(monitorOption.getWaarpConfiguration());
+    return new IngestMonitor(monitorOption.getElapseInSecond() * 1000L,
+                             new File(monitorOption.getStopFilePath()),
+                             IngestRequestFactory.getInstance(),
+                             AdminExternalClientFactory.getInstance(),
+                             new IngestManager());
+  }
+
+  /**
    * Launch the IngestMonitor
    */
   public void invoke() {
-    try (IngestExternalClient client = factory.getClient()) {
+    try (IngestExternalClient client = factory.getClient();
+         AdminExternalClient adminExternalClient = adminFactory.getClient()) {
       logger.warn("Start of {}", IngestMonitor.class.getName());
       while (!stopFile.exists()) {
-        ingestManager.retryAllExistingFiles(factory, client, stopFile);
+        ingestManager
+            .retryAllExistingFiles(factory, client, adminExternalClient,
+                                   stopFile);
         Thread.sleep(elapseTime);
       }
       logger.warn("Stop of {}", IngestMonitor.class.getName());

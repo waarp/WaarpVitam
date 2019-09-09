@@ -31,11 +31,21 @@
  * <br>
  * <ol>
  * <li>Ask for a DIP through Waarp through a post operation of a virtual send
- * of the request in Vitam DSL in a file.</li>
+ * of the request in Vitam DSL in a file.<br>
+ * <ul><li><code>RequestResponse&lt;JsonNode&gt; exportDIP(VitamContext
+ * vitamContext, JsonNode dslRequest) throws VitamClientException;</code></li></ul>
+ * </li>
  * <li>Than the plugin will transfer the file as a request using the Vitam
  * Client.</li>
- * <li>Then it will ask as a pooling for the availability of the DIP and will
- * forward it when ready to the Waarp partner.</li>
+ * <li>Then it will ask as a pooling for the availability of the DIP:<br>
+ * <ul><li><code>RequestResponse&lt;ItemStatus&gt; getOperationProcessStatus
+ * (VitamContext vitamContext, String id)throws VitamClientException;</code></li></ul>
+ * </li>
+ * <li>Then it will get the DIP and will
+ * forward it when ready to the Waarp partner.<br>
+ * <ul><li><code>Response getDIPById(VitamContext vitamContext, String dipId)
+ * throws VitamClientException;</code></li></ul>
+ * </li>
  * </ol>
  * <br>
  * Documentation:<br>

@@ -26,6 +26,7 @@ import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClientFactory;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
+import org.waarp.common.guid.GUID;
 import org.waarp.common.logging.SysErrLogger;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
@@ -43,35 +44,35 @@ import java.util.Properties;
  * Factory that handles IngestRequest within a directory
  */
 public class IngestRequestFactory {
+  public static final String TMP_INGEST_FACTORY = "/tmp/IngestFactory";
+  static final String ORG_WAARP_INGEST_BASEDIR = "org.waarp.ingest.basedir";
   /**
    * Internal Logger
    */
   private static final WaarpLogger logger =
       WaarpLoggerFactory.getLogger(IngestRequestFactory.class);
-  static final String TMP_INGEST_FACTORY = "/tmp/IngestFactory";
   private static final String WORK = "work";
-  static final String ORG_WAARP_INGEST_BASEDIR = "org.waarp.ingest.basedir";
-
-  static boolean vitamTakeCareLocalFile = true;
   private static final String BASENAME =
       IngestRequest.class.getSimpleName() + ".";
   private static final String EXTENSION = ".json";
+  private static final String RESULT_EXTENSION = ".xml";
   private static final FilenameFilter JSON_ONLY =
       (dir, name) -> name.startsWith(BASENAME) && name.endsWith(EXTENSION);
   private static final IngestRequestFactory FACTORY =
       new IngestRequestFactory();
+  static boolean vitamTakeCareLocalFile = true;
 
   static {
     setBaseDir(new File(TMP_INGEST_FACTORY));
   }
 
-  /**
-   * @return the unique name for JSON
-   */
-  private static String getNewName() {
-    synchronized (FACTORY) {
-      return BASENAME + System.nanoTime() + EXTENSION;
-    }
+  private File baseDir;
+  private File workDir;
+  private IngestExternalClientFactory clientFactory =
+      IngestExternalClientFactory.getInstance();
+
+  private IngestRequestFactory() {
+    // empty
   }
 
   /**
@@ -111,7 +112,7 @@ public class IngestRequestFactory {
    *
    * @param baseDirToSet
    */
-  public static void setBaseDir(File baseDirToSet) {
+  private static void setBaseDir(File baseDirToSet) {
     FACTORY.baseDir = baseDirToSet;
     FACTORY.baseDir.mkdirs();
     FACTORY.workDir = new File(FACTORY.baseDir, WORK);
@@ -123,15 +124,6 @@ public class IngestRequestFactory {
    */
   public static IngestRequestFactory getInstance() {
     return FACTORY;
-  }
-
-  private File baseDir;
-  private File workDir;
-  private IngestExternalClientFactory clientFactory =
-      IngestExternalClientFactory.getInstance();
-
-  private IngestRequestFactory() {
-    // empty
   }
 
   /**
@@ -164,6 +156,16 @@ public class IngestRequestFactory {
   }
 
   /**
+   * @return the unique name for JSON
+   */
+  private static String getNewName() {
+    synchronized (FACTORY) {
+      GUID guid = new GUID();
+      return BASENAME + guid.getId() + EXTENSION;
+    }
+  }
+
+  /**
    * Update the IngestRequest
    *
    * @param ingestRequest
@@ -180,25 +182,6 @@ public class IngestRequestFactory {
       return true;
     }
     throw new InvalidParseOperationException("Json File does not exist");
-  }
-
-  /**
-   * Internal
-   *
-   * @param file
-   *
-   * @return true if done
-   */
-  private boolean deleteFile(File file) {
-    if (file.canRead()) {
-      try {
-        Files.delete(file.toPath());
-      } catch (IOException e) {
-        logger.warn("Cannot delete file", e);
-        return false;
-      }
-    }
-    return true;
   }
 
   /**
@@ -235,18 +218,37 @@ public class IngestRequestFactory {
   }
 
   /**
+   * Internal
+   *
+   * @param file
+   *
+   * @return true if done
+   */
+  private boolean deleteFile(File file) {
+    if (file.canRead()) {
+      try {
+        Files.delete(file.toPath());
+      } catch (IOException e) {
+        logger.warn("Cannot delete file", e);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * @param ingestRequest
    *
    * @return the File pointer to the XML ATR file
    */
   File getXmlAtrFile(IngestRequest ingestRequest) {
-    return new File(workDir, ingestRequest.getJsonPath() + EXTENSION);
+    return new File(workDir, ingestRequest.getJsonPath() + RESULT_EXTENSION);
   }
 
   /**
    * @return the list of existing IngestRequests. Some can be not ready or ended
    */
-  synchronized List<IngestRequest> getExistingIngestFactory() {
+  synchronized List<IngestRequest> getExistingIngests() {
     List<IngestRequest> list = new ArrayList<>();
     File[] files = baseDir.listFiles(JSON_ONLY);
     if (files != null) {

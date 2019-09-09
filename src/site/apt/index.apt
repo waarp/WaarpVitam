@@ -1,7 +1,7 @@
-Waarp Vitam Ingest
+Waarp Vitam
 
-  The Waarp Vitam Ingest project is a plugin for Waarp and Vitam projects to
-  enable ingest through Waarp to Vitam.
+  The Waarp Vitam project is a plugin for Waarp and Vitam projects to
+  enable ingest through Waarp to Vitam and DIP export from Vitam.
 
 Dependency
 

@@ -42,9 +42,9 @@
  * allow the creation of the IngestRequest.</li>
  * <li>The plugin will use the following command from Vitam Ingest Client:<br>
  * <ul>
- * <li>RequestResponse<Void> ingestLocal(VitamContext vitamContext,LocalFile
- * localFile, String contextId, String action) throws
- * IngestExternalException;</li>
+ * <li><code>RequestResponse&lt;Void&gt; ingestLocal(VitamContext vitamContext,
+ * LocalFile localFile, String contextId, String action) throws
+ * IngestExternalException;</code></li>
  * <li>Where arguments are:
  * <ul>
  * <li>vitamContext = Among various information needed or optional for Vitam as
@@ -63,11 +63,16 @@
  * the status of the Ingest to get back the ATR (ArchiveTransferReply) using
  * the following Vitam client command:<br>
  * <ul>
- * <li>Response downloadObjectAsync(VitamContext vitamContext,String objectId,
- * IngestCollection type) throws VitamClientException;</li></ul></li>
+ * <li><code>Response downloadObjectAsync(VitamContext vitamContext,String
+ * objectId, IngestCollection type) throws VitamClientException;
+ * </code></li></ul></li>
  * <li>When received, the ATR is sent back to the Waarp Partner and the
  * IngesrRequest is closed.</li>
  * </ul></li>
+ * <li>The pooling for the availability of the ATR is done using:<br>
+ * <ul><li><code>RequestResponse&lt;ItemStatus&gt; getOperationProcessStatus
+ * (VitamContext vitamContext, String id)throws VitamClientException;</code></li></ul>
+ * </li>
  * </ol>
  * <br>
  * Documentation:<br>
