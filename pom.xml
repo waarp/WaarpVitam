@@ -227,8 +227,8 @@
 
     <!-- Dependencies versions -->
     <vitam.version>2.6.3-1</vitam.version>
-    <netty.version>4.1.41.Final</netty.version>
-    <netty-tcnative.version>2.0.25.Final</netty-tcnative.version>
+    <netty.version>4.1.42.Final</netty.version>
+    <netty-tcnative.version>2.0.26.Final</netty-tcnative.version>
     <slf4j.version>1.7.26</slf4j.version>
     <logback.version>1.2.3</logback.version>
     <commons.compress.version>1.19</commons.compress.version>
