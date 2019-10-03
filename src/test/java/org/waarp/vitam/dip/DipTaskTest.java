@@ -44,6 +44,7 @@ import fr.gouv.vitam.common.model.StatusCode;
 import fr.gouv.vitam.common.server.application.junit.ResteasyTestApplication;
 import fr.gouv.vitam.common.serverv2.VitamServerTestRunner;
 import fr.gouv.vitam.common.thread.RunWithCustomExecutor;
+import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -55,11 +56,11 @@ import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.logging.WaarpSlf4JLoggerFactory;
 import org.waarp.openr66.context.R66Session;
 import org.waarp.vitam.CommonUtil;
-import org.waarp.vitam.OperationCheck;
-import org.waarp.vitam.dip.DipManager.DipManagerToWaarp;
+import org.waarp.vitam.common.OperationCheck;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
+import org.waarp.vitam.common.waarp.ManagerToWaarp;
 import org.waarp.vitam.dip.DipRequest.DIPStep;
 import org.waarp.vitam.dip.DipTask.JavaTask;
-import org.waarp.vitam.ingest.IngestTask;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -126,8 +127,9 @@ public class DipTaskTest extends ResteasyTestApplication {
   private static VitamServerTestRunner vitamServerTestRunner =
       new VitamServerTestRunner(DipTaskTest.class, factory);
   private static DipRequestFactory dipRequestFactory;
-  private static DipManagerToWaarp dipManagerToWaarp;
+  private static ManagerToWaarp dipManagerToWaarp;
   private static DipManager dipManager;
+  private static String waarpConfiguration;
 
   static {
     JsonNode node;
@@ -145,10 +147,12 @@ public class DipTaskTest extends ResteasyTestApplication {
   public static void setUpBeforeClass() throws Throwable {
     WaarpLoggerFactory
         .setDefaultFactory(new WaarpSlf4JLoggerFactory(WaarpLogLevel.WARN));
+    DipRequestFactory.setBaseDir(new File("/tmp/DipFactory"));
     vitamServerTestRunner.start();
     client = (AccessExternalClient) vitamServerTestRunner.getClient();
     dipRequestFactory = mock(DipRequestFactory.class);
     doCallRealMethod().when(dipRequestFactory).setBaseDir();
+    doCallRealMethod().when(dipRequestFactory).getBaseDir();
     doCallRealMethod().when(dipRequestFactory).getExistingDips();
     doCallRealMethod().when(dipRequestFactory)
                       .removeDipRequest(any(DipRequest.class));
@@ -167,12 +171,14 @@ public class DipTaskTest extends ResteasyTestApplication {
     OperationCheck.setRetry(1, 10);
     dipRequestFactory.setBaseDir();
     dipManager = new DipManager();
-    dipManagerToWaarp = mock(DipManagerToWaarp.class);
-    dipManager.dipManagerToWaarp = dipManagerToWaarp;
+    dipManagerToWaarp = mock(ManagerToWaarp.class);
+    when(dipRequestFactory.getManagerToWaarp(any(DipRequest.class)))
+        .thenReturn(dipManagerToWaarp);
     setSendMessage(true);
     File file = new File(VITAM_QUERY_DSL);
     FileUtils.write(file, QUERY_DSQL, Charsets.UTF_8);
-    CommonUtil.launchServers(DipRequestFactory.TMP_DIP_FACTORY);
+    CommonUtil.launchServers(dipRequestFactory.getBaseDir().getAbsolutePath());
+    waarpConfiguration = CommonUtil.waarpClientConfig.getAbsolutePath();
   }
 
   private static void setSendMessage(boolean success)
@@ -213,12 +219,13 @@ public class DipTaskTest extends ResteasyTestApplication {
     DipMonitor.main(new String[] {});
     DipTask.main(new String[] {
         "-t", "notANumber", "-f", "/tmp/test", "-a", "access", "-p", "hosta",
-        "-r", "send", "-w", "/tmp/test", "-c", "certificate", "-s", "session"
+        "-r", "send", "-w", waarpConfiguration, "-c", "certificate", "-s",
+        "session"
     });
     DipMonitor.main(new String[] {
         "-e", "notANumber", "-s", "/tmp/test", "-w", "/tmp/test",
         "-D" + DipRequestFactory.ORG_WAARP_DIP_BASEDIR + "=" +
-        DipRequestFactory.TMP_DIP_FACTORY
+        dipRequestFactory.getBaseDir().getAbsolutePath()
     });
     DipTask.main(new String[] {
         "-h"
@@ -234,7 +241,7 @@ public class DipTaskTest extends ResteasyTestApplication {
     properties.put("access", "access");
     properties.put("partner", "partner");
     properties.put("rule", "rule");
-    properties.put("waarp", "/tmp/test");
+    properties.put("waarp", waarpConfiguration);
     try (OutputStream outputStream = new FileOutputStream(
         "/tmp/config.property")) {
       properties.store(outputStream, "Test propoerty file");
@@ -248,7 +255,7 @@ public class DipTaskTest extends ResteasyTestApplication {
     });
     DipMonitor.main(new String[] {
         "-e", "10", "-D" + DipRequestFactory.ORG_WAARP_DIP_BASEDIR + "=" +
-                    DipRequestFactory.TMP_DIP_FACTORY
+                    dipRequestFactory.getBaseDir().getAbsolutePath()
     });
   }
 
@@ -264,11 +271,10 @@ public class DipTaskTest extends ResteasyTestApplication {
 
     DipTask.JavaTask javaTask = new JavaTask();
     String arg = "-t notANumber -f /tmp/test -a access " +
-                 "-p hosta -r send -w /tmp/test -c certificate " +
-                 "-s session";
+                 "-p hosta -r send -w /tmp/test -c certificate " + "-s session";
     javaTask
-        .setArgs(new R66Session(), true, false, 0, DipTask.class.getName(),
-                 arg, false, false);
+        .setArgs(new R66Session(), true, false, 0, DipTask.class.getName(), arg,
+                 false, false);
     javaTask.run();
     assertEquals(2, javaTask.getFinalStatus());
   }
@@ -309,10 +315,11 @@ public class DipTaskTest extends ResteasyTestApplication {
   public void givenCorrectSelectOK() throws Exception {
     when(mock.post()).thenReturn(getDslResponseStream());
     setSendMessage(true);
-    DipTask task =
-        new DipTask(VITAM_QUERY_DSL, TENANT_ID, "applicationSessionId",
-                    "personalCertificate", CONTRACT, "hosta", "send",
-                    dipRequestFactory, dipManager);
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, VITAM_QUERY_DSL, TENANT_ID,
+                       "applicationSessionId", "personalCertificate", CONTRACT,
+                       "hosta", "send", null);
+    DipTask task = new DipTask(taskOption, dipRequestFactory, dipManager);
     assertEquals(0, task.invoke());
     List<DipRequest> list = dipRequestFactory.getExistingDips();
     if (list != null && !list.isEmpty()) {
@@ -324,39 +331,43 @@ public class DipTaskTest extends ResteasyTestApplication {
 
   @Test
   @RunWithCustomExecutor
-  public void givenSelectNotFoundKO() throws InvalidParseOperationException {
+  public void givenSelectNotFoundKO()
+      throws InvalidParseOperationException, ParseException {
     when(mock.post()).thenReturn(Response.status(Status.NOT_FOUND).build());
     setSendMessage(true);
-
-    DipTask task =
-        new DipTask(VITAM_QUERY_DSL, TENANT_ID, "applicationSessionId", null,
-                    CONTRACT, "hosta", "send", dipRequestFactory, dipManager);
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, VITAM_QUERY_DSL, TENANT_ID,
+                       "applicationSessionId", null, CONTRACT, "hosta", "send",
+                       null);
+    DipTask task = new DipTask(taskOption, dipRequestFactory, dipManager);
     assertEquals(2, task.invoke());
   }
 
   @Test
   @RunWithCustomExecutor
-  public void givenSelectUnsupportedMediaType()
-      throws InvalidParseOperationException {
+  public void givenSelectUnsupportedMediaType() throws ParseException {
     when(mock.post()).thenReturn(Response.status(Status.UNSUPPORTED_MEDIA_TYPE)
                                          .header(GlobalDataRest.X_REQUEST_ID,
                                                  FAKE_X_REQUEST_ID).build());
-    DipTask task =
-        new DipTask(VITAM_QUERY_DSL, TENANT_ID, "applicationSessionId", null,
-                    CONTRACT, "hosta", "send", dipRequestFactory, dipManager);
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, VITAM_QUERY_DSL, TENANT_ID,
+                       "applicationSessionId", "personalCertificate", CONTRACT,
+                       "hosta", "send", null);
+    DipTask task = new DipTask(taskOption, dipRequestFactory, dipManager);
     assertEquals(2, task.invoke());
   }
 
   @Test
   @RunWithCustomExecutor
   public void givenStreamWhenDownloadObjectOK()
-      throws InvalidParseOperationException, IOException, VitamClientException {
+      throws InvalidParseOperationException, IOException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
     when(mock.get()).thenReturn(getObjectStream());
     setSendMessage(true);
-    File file = new File(DipRequestFactory.TMP_DIP_FACTORY + "/test");
+    File file = new File(dipRequestFactory.getBaseDir(), "test");
     FileUtils.write(file, "testContent");
     when(dipRequestFactory.getDipFile(any(DipRequest.class))).thenReturn(file);
     DipRequest dipRequest = newDipRequest();
@@ -378,15 +389,20 @@ public class DipTaskTest extends ResteasyTestApplication {
                                    headers);
   }
 
-  private DipRequest newDipRequest() throws InvalidParseOperationException {
-    return new DipRequest(VITAM_QUERY_DSL, TENANT_ID, "applicationSessionId",
-                          null, CONTRACT, "hosta", "send", dipRequestFactory);
+  private DipRequest newDipRequest()
+      throws InvalidParseOperationException, ParseException {
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, VITAM_QUERY_DSL, TENANT_ID,
+                       "applicationSessionId", "personalCertificate", CONTRACT,
+                       "hosta", "send", null);
+    return new DipRequest(taskOption, dipRequestFactory);
   }
 
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenDownloadObjectKO()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
@@ -405,7 +421,8 @@ public class DipTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenCheckKO()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckKo(VitamCode.INGEST_EXTERNAL_INTERNAL_SERVER_ERROR))
         .when(adminExternalClient)
         .getOperationProcessStatus(any(VitamContext.class), anyString());
@@ -417,7 +434,8 @@ public class DipTaskTest extends ResteasyTestApplication {
               .setStatus(DIPStep.RETRY_SELECT.getStatusMonitor());
     dipRequest.setStep(DIPStep.RETRY_DIP, 0, dipRequestFactory);
     OperationCheck.main(new String[] {
-        DipRequestFactory.TMP_DIP_FACTORY + "/" + dipRequest.getJsonPath()
+        dipRequestFactory.getBaseDir().getAbsolutePath() + "/" +
+        dipRequest.getJsonPath()
     });
     assertFalse(OperationCheck.getResult());
     assertEquals(false, dipManager
@@ -445,7 +463,8 @@ public class DipTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenDownloadObjectUnavailable()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
@@ -464,7 +483,8 @@ public class DipTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenDownloadObjectNotFound()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
@@ -482,7 +502,8 @@ public class DipTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void dipMonitorEarlyErrorTest()
-      throws InvalidParseOperationException, InterruptedException, IOException {
+      throws InvalidParseOperationException, InterruptedException, IOException,
+             ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but early error, then send back Id (not any indeed) and END
@@ -566,7 +587,7 @@ public class DipTaskTest extends ResteasyTestApplication {
   @RunWithCustomExecutor
   public void dipMonitorErrorDipTest()
       throws InvalidParseOperationException, InterruptedException, IOException,
-             VitamClientException {
+             VitamClientException, ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but error during DIP, then send back Id and END
@@ -589,7 +610,7 @@ public class DipTaskTest extends ResteasyTestApplication {
   @RunWithCustomExecutor
   public void dipMonitorOkTest()
       throws InvalidParseOperationException, InterruptedException, IOException,
-             VitamClientException {
+             VitamClientException, ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but first NotFound during DIP, then OK but DIP could not be sent
@@ -620,7 +641,7 @@ public class DipTaskTest extends ResteasyTestApplication {
   @RunWithCustomExecutor
   public void dipMonitorCheckOkTest()
       throws InvalidParseOperationException, InterruptedException, IOException,
-             VitamClientException {
+             VitamClientException, ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but first NotFound during DIP, then OK but DIP could not be sent

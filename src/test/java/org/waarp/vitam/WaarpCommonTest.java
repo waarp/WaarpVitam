@@ -25,8 +25,8 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;
 import org.junit.Test;
-import org.waarp.vitam.WaarpCommon.MonitorOption;
-import org.waarp.vitam.WaarpCommon.TaskOption;
+import org.waarp.vitam.common.WaarpCommon.MonitorOption;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
 
 import static junit.framework.TestCase.*;
 

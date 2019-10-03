@@ -31,6 +31,8 @@ import org.waarp.common.logging.SysErrLogger;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.utility.SystemPropertyUtil;
+import org.waarp.vitam.common.waarp.ManagerToWaarp;
+import org.waarp.vitam.common.waarp.ManagerToWaarpFactory;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -44,7 +46,8 @@ import java.util.Properties;
  * Factory that handles IngestRequest within a directory
  */
 public class IngestRequestFactory {
-  public static final String TMP_INGEST_FACTORY = "/tmp/IngestFactory";
+  public static final String DEFAULT_INGEST_FACTORY =
+      "/waarp/data/r66/IngestFactory";
   static final String ORG_WAARP_INGEST_BASEDIR = "org.waarp.ingest.basedir";
   /**
    * Internal Logger
@@ -63,7 +66,7 @@ public class IngestRequestFactory {
   static boolean vitamTakeCareLocalFile = true;
 
   static {
-    setBaseDir(new File(TMP_INGEST_FACTORY));
+    setBaseDir(new File(DEFAULT_INGEST_FACTORY));
   }
 
   private File baseDir;
@@ -98,12 +101,12 @@ public class IngestRequestFactory {
     if (cmd.hasOption('D')) {
       Properties properties = cmd.getOptionProperties("D");
       setBaseDir(new File(properties.getProperty(ORG_WAARP_INGEST_BASEDIR,
-                                                 TMP_INGEST_FACTORY)));
+                                                 DEFAULT_INGEST_FACTORY)));
     } else if (SystemPropertyUtil.contains(ORG_WAARP_INGEST_BASEDIR)) {
       setBaseDir(new File(SystemPropertyUtil.get(ORG_WAARP_INGEST_BASEDIR,
-                                                 TMP_INGEST_FACTORY)));
+                                                 DEFAULT_INGEST_FACTORY)));
     } else {
-      setBaseDir(new File(TMP_INGEST_FACTORY));
+      setBaseDir(new File(DEFAULT_INGEST_FACTORY));
     }
   }
 
@@ -112,7 +115,7 @@ public class IngestRequestFactory {
    *
    * @param baseDirToSet
    */
-  private static void setBaseDir(File baseDirToSet) {
+  static void setBaseDir(File baseDirToSet) {
     FACTORY.baseDir = baseDirToSet;
     FACTORY.baseDir.mkdirs();
     FACTORY.workDir = new File(FACTORY.baseDir, WORK);
@@ -135,10 +138,27 @@ public class IngestRequestFactory {
   }
 
   /**
+   * @return the base directory
+   */
+  File getBaseDir() {
+    return baseDir;
+  }
+
+  /**
    * @return the Ingest Vitam client
    */
   public IngestExternalClient getClient() {
     return clientFactory.getClient();
+  }
+
+  /**
+   * @param ingestRequest
+   *
+   * @return the associated ManagerToWaarp
+   */
+  public ManagerToWaarp getManagerToWaarp(IngestRequest ingestRequest) {
+    return ManagerToWaarpFactory
+        .getManagerToWaarp(ingestRequest.getWaarpModel());
   }
 
   /**

@@ -39,6 +39,7 @@ public abstract class CommonUtil {
   private static File baseDir;
   private static File resources;
   private static File projectHome;
+  public static File waarpClientConfig;
 
   public static void launchServers(String baseDirHome) throws Exception {
     ResourceLeakDetector.setLevel(Level.PARANOID);
@@ -54,12 +55,12 @@ public abstract class CommonUtil {
         new File(classLoader.getResource(CONFIG_CLIENT_SUBMIT_XML).getFile());
     final String newfile = file.getAbsolutePath().replace("target/test-classes",
                                                           "src/test/resources");
-    file = new File(newfile);
-    if (file.exists()) {
+    waarpClientConfig = new File(newfile);
+    if (waarpClientConfig.exists()) {
       // R66 Home
       home = new File("/tmp/R66");
       // Resources directory
-      resources = file.getParentFile();
+      resources = waarpClientConfig.getParentFile();
       // Project Home directory
       projectHome = resources.getParentFile().getParentFile().getParentFile();
       home.mkdirs();

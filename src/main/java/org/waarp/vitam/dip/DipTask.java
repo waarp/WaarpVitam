@@ -34,8 +34,8 @@ import org.waarp.common.utility.Version;
 import org.waarp.openr66.configuration.FileBasedConfiguration;
 import org.waarp.openr66.context.task.AbstractExecJavaTask;
 import org.waarp.openr66.protocol.configuration.Configuration;
-import org.waarp.vitam.WaarpCommon;
-import org.waarp.vitam.WaarpCommon.TaskOption;
+import org.waarp.vitam.common.WaarpCommon;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
 
 import java.io.File;
 
@@ -51,41 +51,20 @@ public class DipTask {
       WaarpLoggerFactory.getLogger(DipTask.class);
   private static File waarpConfigurationFile;
   private static int statusMain;
-  private final String path;
-  private final int tenantId;
-  private final String applicationSessionId;
-  private final String personalCertificate;
-  private final String accessContract;
-  private final String waarpPartner;
-  private final String waarpRule;
+  private final TaskOption taskOption;
   private final DipRequestFactory factory;
   private final DipManager dipManager;
 
   /**
    * Unique constructor
    *
-   * @param path
-   * @param tenantId
-   * @param applicationSessionId
-   * @param personalCertificate
-   * @param accessContract
-   * @param waarpPartner
-   * @param waarpRule
+   * @param taskOption
    * @param factory
    * @param dipManager
    */
-  public DipTask(final String path, final int tenantId,
-                 final String applicationSessionId,
-                 final String personalCertificate, final String accessContract,
-                 final String waarpPartner, final String waarpRule,
-                 final DipRequestFactory factory, final DipManager dipManager) {
-    this.path = path;
-    this.tenantId = tenantId;
-    this.applicationSessionId = applicationSessionId;
-    this.personalCertificate = personalCertificate;
-    this.accessContract = accessContract;
-    this.waarpPartner = waarpPartner;
-    this.waarpRule = waarpRule;
+  public DipTask(final TaskOption taskOption, final DipRequestFactory factory,
+                 final DipManager dipManager) {
+    this.taskOption = taskOption;
     this.factory = factory;
     this.dipManager = dipManager;
   }
@@ -166,12 +145,8 @@ public class DipTask {
     DipRequestFactory.parseDirectoryOption(cmd);
     TaskOption taskOption = TaskOption.getTaskOption(cmd, args);
     waarpConfigurationFile = new File(taskOption.getWaarpConfigurationFile());
-    return new DipTask(taskOption.getPath(), taskOption.getTenantId(),
-                       taskOption.getApplicationSessionId(),
-                       taskOption.getPersonalCertificate(),
-                       taskOption.getAccessContract(),
-                       taskOption.getWaarpPartner(), taskOption.getWaarpRule(),
-                       DipRequestFactory.getInstance(), new DipManager());
+    return new DipTask(taskOption, DipRequestFactory.getInstance(),
+                       new DipManager());
   }
 
   /**
@@ -181,10 +156,7 @@ public class DipTask {
    */
   public int invoke() {
     try (AccessExternalClient client = factory.getClient()) {
-      DipRequest dipRequest =
-          new DipRequest(path, tenantId, applicationSessionId,
-                         personalCertificate, accessContract, waarpPartner,
-                         waarpRule, factory);
+      DipRequest dipRequest = new DipRequest(taskOption, factory);
       return dipManager.select(factory, dipRequest, client);
     } catch (InvalidParseOperationException e) {
       logger.error("Issue since DipRequest cannot be saved", e);
@@ -198,7 +170,17 @@ public class DipTask {
   public static class JavaTask extends AbstractExecJavaTask {
     @Override
     public void run() {
-      final String[] args = BLANK.split(fullarg);
+      String[] args;
+      if (!fullarg.contains("-s ") && !fullarg.contains("--session ")) {
+        try {
+          String key = this.session.getRunner().getKey();
+          args = BLANK.split(fullarg + " -s " + key);
+        } catch (Throwable e) {
+          args = BLANK.split(fullarg);
+        }
+      } else {
+        args = BLANK.split(fullarg);
+      }
       main(args);
       status = statusMain;
     }

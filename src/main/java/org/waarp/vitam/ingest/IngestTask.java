@@ -34,8 +34,8 @@ import org.waarp.common.utility.Version;
 import org.waarp.openr66.configuration.FileBasedConfiguration;
 import org.waarp.openr66.context.task.AbstractExecJavaTask;
 import org.waarp.openr66.protocol.configuration.Configuration;
-import org.waarp.vitam.WaarpCommon;
-import org.waarp.vitam.WaarpCommon.TaskOption;
+import org.waarp.vitam.common.WaarpCommon;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
 
 import java.io.File;
 
@@ -51,14 +51,8 @@ public class IngestTask {
       WaarpLoggerFactory.getLogger(IngestTask.class);
   private static File waarpConfigurationFile;
   private static int statusMain;
-  private final String path;
-  private final int tenantId;
-  private final String applicationSessionId;
-  private final String personalCertificate;
-  private final String accessContract;
+  private final TaskOption taskOption;
   private final String contextId;
-  private final String waarpPartner;
-  private final String waarpRule;
   private final String action;
   private final boolean checkAtr;
   private final IngestRequestFactory factory;
@@ -67,36 +61,20 @@ public class IngestTask {
   /**
    * Unique constructor
    *
-   * @param path
-   * @param tenantId
-   * @param applicationSessionId
-   * @param personalCertificate
-   * @param accessContract
+   * @param taskOption
    * @param contextId
    * @param action
-   * @param waarpPartner
-   * @param waarpRule
    * @param checkAtr
    * @param factory
    * @param ingestManager
    */
-  public IngestTask(final String path, final int tenantId,
-                    final String applicationSessionId,
-                    final String personalCertificate,
-                    final String accessContract, final String contextId,
-                    final String action, final String waarpPartner,
-                    final String waarpRule, final boolean checkAtr,
+  public IngestTask(final TaskOption taskOption, final String contextId,
+                    final String action, final boolean checkAtr,
                     final IngestRequestFactory factory,
                     final IngestManager ingestManager) {
-    this.path = path;
-    this.tenantId = tenantId;
-    this.applicationSessionId = applicationSessionId;
-    this.personalCertificate = personalCertificate;
-    this.accessContract = accessContract;
+    this.taskOption = taskOption;
     this.contextId = contextId;
     this.action = action;
-    this.waarpPartner = waarpPartner;
-    this.waarpRule = waarpRule;
     this.checkAtr = checkAtr;
     this.factory = factory;
     this.ingestManager = ingestManager;
@@ -192,12 +170,7 @@ public class IngestTask {
     final String action = cmd.getOptionValue('n', IngestRequest.RESUME);
     TaskOption taskOption = TaskOption.getTaskOption(cmd, args);
     waarpConfigurationFile = new File(taskOption.getWaarpConfigurationFile());
-    return new IngestTask(taskOption.getPath(), taskOption.getTenantId(),
-                          taskOption.getApplicationSessionId(),
-                          taskOption.getPersonalCertificate(),
-                          taskOption.getAccessContract(), contextId, action,
-                          taskOption.getWaarpPartner(),
-                          taskOption.getWaarpRule(), cmd.hasOption('k'),
+    return new IngestTask(taskOption, contextId, action, cmd.hasOption('k'),
                           IngestRequestFactory.getInstance(),
                           new IngestManager());
   }
@@ -210,9 +183,7 @@ public class IngestTask {
   public int invoke() {
     try (IngestExternalClient client = factory.getClient()) {
       IngestRequest ingestRequest =
-          new IngestRequest(path, tenantId, applicationSessionId,
-                            personalCertificate, accessContract, contextId,
-                            action, waarpPartner, waarpRule, checkAtr, factory);
+          new IngestRequest(taskOption, contextId, action, checkAtr, factory);
       return ingestManager.ingestLocally(factory, ingestRequest, client);
     } catch (InvalidParseOperationException e) {
       logger.error("Issue since IngestRequest cannot be saved", e);
@@ -226,7 +197,17 @@ public class IngestTask {
   public static class JavaTask extends AbstractExecJavaTask {
     @Override
     public void run() {
-      final String[] args = BLANK.split(fullarg);
+      String[] args;
+      if (!fullarg.contains("-s ") && !fullarg.contains("--session ")) {
+        try {
+          String key = this.session.getRunner().getKey();
+          args = BLANK.split(fullarg + " -s " + key);
+        } catch (Throwable e) {
+          args = BLANK.split(fullarg);
+        }
+      } else {
+        args = BLANK.split(fullarg);
+      }
       main(args);
       status = statusMain;
     }

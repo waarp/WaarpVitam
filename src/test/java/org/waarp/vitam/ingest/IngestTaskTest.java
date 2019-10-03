@@ -44,6 +44,7 @@ import fr.gouv.vitam.common.serverv2.VitamServerTestRunner;
 import fr.gouv.vitam.common.thread.RunWithCustomExecutor;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClientFactory;
+import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -55,8 +56,9 @@ import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.logging.WaarpSlf4JLoggerFactory;
 import org.waarp.openr66.context.R66Session;
 import org.waarp.vitam.CommonUtil;
-import org.waarp.vitam.OperationCheck;
-import org.waarp.vitam.ingest.IngestManager.IngestManagerToWaarp;
+import org.waarp.vitam.common.OperationCheck;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
+import org.waarp.vitam.common.waarp.ManagerToWaarp;
 import org.waarp.vitam.ingest.IngestRequest.IngestStep;
 import org.waarp.vitam.ingest.IngestTask.JavaTask;
 
@@ -106,18 +108,21 @@ public class IngestTaskTest extends ResteasyTestApplication {
   private static VitamServerTestRunner vitamServerTestRunner =
       new VitamServerTestRunner(IngestTaskTest.class, factory);
   private static IngestRequestFactory ingestRequestFactory;
-  private static IngestManagerToWaarp ingestManagerToWaarp;
+  private static ManagerToWaarp ingestManagerToWaarp;
   private static IngestManager ingestManager;
   private final int TENANT_ID = 0;
+  private static String waarpConfiguration;
 
   @BeforeClass
   public static void setUpBeforeClass() throws Throwable {
     WaarpLoggerFactory
         .setDefaultFactory(new WaarpSlf4JLoggerFactory(WaarpLogLevel.WARN));
+    IngestRequestFactory.setBaseDir(new File("/tmp/IngestFactory"));
     vitamServerTestRunner.start();
     client = (IngestExternalClient) vitamServerTestRunner.getClient();
     ingestRequestFactory = mock(IngestRequestFactory.class);
     doCallRealMethod().when(ingestRequestFactory).setBaseDir();
+    doCallRealMethod().when(ingestRequestFactory).getBaseDir();
     doCallRealMethod().when(ingestRequestFactory).getExistingIngests();
     doCallRealMethod().when(ingestRequestFactory)
                       .removeIngestRequest(any(IngestRequest.class));
@@ -133,12 +138,17 @@ public class IngestTaskTest extends ResteasyTestApplication {
     when(adminFactory.getClient()).thenReturn(adminExternalClient);
     OperationCheck.setRetry(1, 10);
     ingestRequestFactory.setBaseDir();
+    assertTrue(ingestRequestFactory.getBaseDir().getAbsolutePath()
+                                   .equals("/tmp/IngestFactory"));
     ingestManager = new IngestManager();
-    ingestManagerToWaarp = mock(IngestManagerToWaarp.class);
-    ingestManager.ingestManagerToWaarp = ingestManagerToWaarp;
+    ingestManagerToWaarp = mock(ManagerToWaarp.class);
+    when(ingestRequestFactory.getManagerToWaarp(any(IngestRequest.class)))
+        .thenReturn(ingestManagerToWaarp);
     setSendMessage(true);
 
-    CommonUtil.launchServers(IngestRequestFactory.TMP_INGEST_FACTORY);
+    CommonUtil
+        .launchServers(ingestRequestFactory.getBaseDir().getAbsolutePath());
+    waarpConfiguration = CommonUtil.waarpClientConfig.getAbsolutePath();
   }
 
   private static void setSendMessage(boolean success)
@@ -179,13 +189,14 @@ public class IngestTaskTest extends ResteasyTestApplication {
     IngestMonitor.main(new String[] {});
     IngestTask.main(new String[] {
         "-t", "notANumber", "-f", "/tmp/test", "-a", "access", "-x",
-        "DEFAULT_WORKFLOW", "-p", "hosta", "-r", "send", "-w", "/tmp/test",
-        "-c", "certificate", "-k", "-n", "RESUME", "-s", "session"
+        "DEFAULT_WORKFLOW", "-p", "hosta", "-r", "send", "-w",
+        waarpConfiguration, "-c", "certificate", "-k", "-n", "RESUME", "-s",
+        "session"
     });
     IngestMonitor.main(new String[] {
-        "-e", "notANumber", "-s", "/tmp/test", "-w", "/tmp/test",
+        "-e", "notANumber", "-s", "/tmp/test", "-w", waarpConfiguration,
         "-D" + IngestRequestFactory.ORG_WAARP_INGEST_BASEDIR + "=" +
-        IngestRequestFactory.TMP_INGEST_FACTORY
+        ingestRequestFactory.getBaseDir().getAbsolutePath()
     });
     IngestTask.main(new String[] {
         "-h"
@@ -201,7 +212,7 @@ public class IngestTaskTest extends ResteasyTestApplication {
     properties.put("access", "access");
     properties.put("partner", "partner");
     properties.put("rule", "rule");
-    properties.put("waarp", "/tmp/test");
+    properties.put("waarp", waarpConfiguration);
     try (OutputStream outputStream = new FileOutputStream(
         "/tmp/config.property")) {
       properties.store(outputStream, "Test propoerty file");
@@ -216,7 +227,7 @@ public class IngestTaskTest extends ResteasyTestApplication {
     });
     IngestMonitor.main(new String[] {
         "-e", "10", "-D" + IngestRequestFactory.ORG_WAARP_INGEST_BASEDIR + "=" +
-                    IngestRequestFactory.TMP_INGEST_FACTORY
+                    ingestRequestFactory.getBaseDir().getAbsolutePath()
     });
   }
 
@@ -266,11 +277,13 @@ public class IngestTaskTest extends ResteasyTestApplication {
             GlobalDataRest.X_GLOBAL_EXECUTION_STATUS, StatusCode.UNKNOWN)
                                          .build());
     setSendMessage(true);
-    IngestTask task = new IngestTask("path", TENANT_ID, "applicationSessionId",
-                                     "personalCertificate", "accessContract",
-                                     CONTEXT_ID, EXECUTION_MODE, "hosta",
-                                     "send", true, ingestRequestFactory,
-                                     ingestManager);
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, "path", TENANT_ID,
+                       "applicationSessionId", "personalCertificate",
+                       "accessContract", "hosta", "send", null);
+    IngestTask task =
+        new IngestTask(taskOption, CONTEXT_ID, EXECUTION_MODE, true,
+                       ingestRequestFactory, ingestManager);
     assertEquals(0, task.invoke());
     List<IngestRequest> list = ingestRequestFactory.getExistingIngests();
     if (list != null && !list.isEmpty()) {
@@ -284,24 +297,27 @@ public class IngestTaskTest extends ResteasyTestApplication {
 
   @Test
   @RunWithCustomExecutor
-  public void givenUploadLocalFileKO() throws InvalidParseOperationException {
+  public void givenUploadLocalFileKO()
+      throws InvalidParseOperationException, ParseException {
     when(mock.post()).thenReturn(
         Response.status(Status.INTERNAL_SERVER_ERROR.getStatusCode())
                 .header(GlobalDataRest.X_REQUEST_ID, FAKE_X_REQUEST_ID)
                 .build());
     setSendMessage(true);
-
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, "path", TENANT_ID,
+                       "applicationSessionId", "personalCertificate",
+                       "accessContract", "hosta", "send", null);
     IngestTask task =
-        new IngestTask("path", TENANT_ID, "applicationSessionId", null,
-                       "accessContract", CONTEXT_ID, EXECUTION_MODE, "hosta",
-                       "send", true, ingestRequestFactory, ingestManager);
+        new IngestTask(taskOption, CONTEXT_ID, EXECUTION_MODE, true,
+                       ingestRequestFactory, ingestManager);
     assertEquals(2, task.invoke());
   }
 
   @Test
   @RunWithCustomExecutor
   public void givenUploadLocalFileUnavailable()
-      throws InvalidParseOperationException {
+      throws InvalidParseOperationException, ParseException {
     final MultivaluedHashMap<String, Object> headers =
         new MultivaluedHashMap<String, Object>();
     headers.add(GlobalDataRest.X_REQUEST_ID, FAKE_X_REQUEST_ID);
@@ -314,11 +330,13 @@ public class IngestTaskTest extends ResteasyTestApplication {
                                                    MediaType.APPLICATION_OCTET_STREAM_TYPE,
                                                    headers);
     when(mock.post()).thenReturn(fakeResponse);
-
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, "path", TENANT_ID,
+                       "applicationSessionId", "personalCertificate",
+                       "accessContract", "hosta", "send", null);
     IngestTask task =
-        new IngestTask("path", TENANT_ID, "applicationSessionId", null,
-                       "accessContract", CONTEXT_ID, EXECUTION_MODE, "hosta",
-                       "send", true, ingestRequestFactory, ingestManager);
+        new IngestTask(taskOption, CONTEXT_ID, EXECUTION_MODE, true,
+                       ingestRequestFactory, ingestManager);
     assertEquals(1, task.invoke());
   }
 
@@ -329,14 +347,15 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void givenStreamWhenDownloadObjectOK()
-      throws InvalidParseOperationException, IOException, VitamClientException {
+      throws InvalidParseOperationException, IOException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
 
     when(mock.get()).thenReturn(ClientMockResultHelper.getObjectStream());
     setSendMessage(true);
-    File file = new File(IngestRequestFactory.TMP_INGEST_FACTORY + "/test");
+    File file = new File(ingestRequestFactory.getBaseDir(), "test");
     FileUtils.write(file, "testContent");
     when(ingestRequestFactory.getXmlAtrFile(any(IngestRequest.class)))
         .thenReturn(file);
@@ -350,16 +369,20 @@ public class IngestTaskTest extends ResteasyTestApplication {
   }
 
   private IngestRequest newIngestRequest()
-      throws InvalidParseOperationException {
-    return new IngestRequest("path", TENANT_ID, "applicationSessionId", null,
-                             "accessContract", CONTEXT_ID, EXECUTION_MODE,
-                             "hosta", "send", true, ingestRequestFactory);
+      throws ParseException, InvalidParseOperationException {
+    TaskOption taskOption =
+        new TaskOption(waarpConfiguration, "path", TENANT_ID,
+                       "applicationSessionId", "personalCertificate",
+                       "accessContract", "hosta", "send", null);
+    return new IngestRequest(taskOption, CONTEXT_ID, EXECUTION_MODE, true,
+                             ingestRequestFactory);
   }
 
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenDownloadObjectKO()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
@@ -381,7 +404,8 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenDownloadObjectUnavailable()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
@@ -403,7 +427,8 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenDownloadObjectNotFound()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckOk(Status.OK)).when(adminExternalClient)
                                       .getOperationProcessStatus(
                                           any(VitamContext.class), anyString());
@@ -425,7 +450,8 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void givenErrorWhenDownloadObjectCheckError()
-      throws InvalidParseOperationException, VitamClientException {
+      throws InvalidParseOperationException, VitamClientException,
+             ParseException {
     doReturn(returnCheckKo(VitamCode.INGEST_EXTERNAL_INTERNAL_SERVER_ERROR))
         .when(adminExternalClient)
         .getOperationProcessStatus(any(VitamContext.class), anyString());
@@ -440,7 +466,7 @@ public class IngestTaskTest extends ResteasyTestApplication {
                  .setStatus(IngestStep.RETRY_INGEST_ID.getStatusMonitor());
     ingestRequest.setStep(IngestStep.RETRY_ATR, 0, ingestRequestFactory);
     OperationCheck.main(new String[] {
-        IngestRequestFactory.TMP_INGEST_FACTORY + "/" +
+        ingestRequestFactory.getBaseDir().getAbsolutePath() + "/" +
         ingestRequest.getJsonPath()
     });
     assertFalse(OperationCheck.getResult());
@@ -452,7 +478,8 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void ingestMonitorEarlyErrorTest()
-      throws InvalidParseOperationException, InterruptedException, IOException {
+      throws InvalidParseOperationException, InterruptedException, IOException,
+             ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but early error, then send back Id (not any indeed) and END
@@ -543,7 +570,7 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @RunWithCustomExecutor
   public void ingestMonitorErrorAtrTest()
       throws InvalidParseOperationException, InterruptedException, IOException,
-             VitamClientException {
+             VitamClientException, ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but error during ATR, then send back Id and END
@@ -575,7 +602,7 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @RunWithCustomExecutor
   public void ingestMonitorOkTest()
       throws InvalidParseOperationException, InterruptedException, IOException,
-             VitamClientException {
+             VitamClientException, ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but first NotFound during ATR, then OK but ATR could not be sent
@@ -624,7 +651,8 @@ public class IngestTaskTest extends ResteasyTestApplication {
   @Test
   @RunWithCustomExecutor
   public void ingestMonitorNoCheckTestOk()
-      throws InvalidParseOperationException, InterruptedException, IOException {
+      throws InvalidParseOperationException, InterruptedException, IOException,
+             ParseException {
     MonitorThread monitorThread = startMonitor();
 
     // Start but no check so stop early

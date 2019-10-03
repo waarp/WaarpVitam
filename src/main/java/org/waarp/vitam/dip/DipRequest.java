@@ -35,7 +35,8 @@ import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.state.MachineState;
 import org.waarp.common.state.Transition;
-import org.waarp.vitam.AbstractVitamRequest;
+import org.waarp.vitam.common.AbstractVitamRequest;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
 
 import java.io.File;
 import java.util.EnumSet;
@@ -57,25 +58,15 @@ public class DipRequest extends AbstractVitamRequest {
   /**
    * Standard constructor
    *
-   * @param path
-   * @param tenantId
-   * @param applicationSessionId
-   * @param personalCertificate
-   * @param accessContract
-   * @param waarpPartner
-   * @param waarpRule
+   * @param taskOption
    * @param factory
    *
    * @throws InvalidParseOperationException
    */
-  public DipRequest(final String path, final int tenantId,
-                    final String applicationSessionId,
-                    final String personalCertificate,
-                    final String accessContract, final String waarpPartner,
-                    final String waarpRule, final DipRequestFactory factory)
+  public DipRequest(final TaskOption taskOption,
+                    final DipRequestFactory factory)
       throws InvalidParseOperationException {
-    super(path, tenantId, applicationSessionId, personalCertificate,
-          accessContract, waarpPartner, waarpRule);
+    super(taskOption);
     this.status = this.step.getCurrent().getStatusMonitor();
     try {
       factory.saveNewDipRequest(this);

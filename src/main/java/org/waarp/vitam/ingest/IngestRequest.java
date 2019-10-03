@@ -25,18 +25,20 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import fr.gouv.vitam.common.GlobalDataRest;
-import fr.gouv.vitam.common.ParametersChecker;
 import fr.gouv.vitam.common.StringUtils;
 import fr.gouv.vitam.common.exception.InvalidParseOperationException;
 import fr.gouv.vitam.common.json.JsonHandler;
 import fr.gouv.vitam.common.model.LocalFile;
 import fr.gouv.vitam.common.model.RequestResponseOK;
 import org.waarp.common.exception.IllegalFiniteStateException;
+import org.waarp.common.exception.InvalidArgumentException;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.state.MachineState;
 import org.waarp.common.state.Transition;
-import org.waarp.vitam.AbstractVitamRequest;
+import org.waarp.common.utility.ParametersChecker;
+import org.waarp.vitam.common.AbstractVitamRequest;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
 
 import java.io.File;
 import java.util.EnumSet;
@@ -76,35 +78,24 @@ public class IngestRequest extends AbstractVitamRequest {
   /**
    * Standard constructor
    *
-   * @param path
-   * @param tenantId
-   * @param applicationSessionId
-   * @param personalCertificate
-   * @param accessContract
+   * @param taskOption
    * @param contextId
    * @param action
-   * @param waarpPartner
-   * @param waarpRule
    * @param checkAtr
    * @param factory
    *
    * @throws InvalidParseOperationException
    */
-  public IngestRequest(final String path, final int tenantId,
-                       final String applicationSessionId,
-                       final String personalCertificate,
-                       final String accessContract, final String contextId,
-                       final String action, final String waarpPartner,
-                       final String waarpRule, final boolean checkAtr,
+  public IngestRequest(final TaskOption taskOption, final String contextId,
+                       final String action, final boolean checkAtr,
                        final IngestRequestFactory factory)
       throws InvalidParseOperationException {
-    super(path, tenantId, applicationSessionId, personalCertificate,
-          accessContract, waarpPartner, waarpRule);
+    super(taskOption);
     try {
       ParametersChecker
           .checkParameterDefault(getCheckMessage(), contextId, action);
-      StringUtils.checkSanityString(contextId, action);
-    } catch (InvalidParseOperationException | IllegalArgumentException e) {
+      ParametersChecker.checkSanityString(contextId, action);
+    } catch (IllegalArgumentException | InvalidArgumentException e) {
       logger.error(e);
       throw new InvalidParseOperationException(e);
     }
@@ -283,9 +274,9 @@ public class IngestRequest extends AbstractVitamRequest {
       ParametersChecker.checkParameterDefault(getCheckMessage(), requestIdNew,
                                               globalExecutionStateNew,
                                               globalExecutionStatusNew);
-      StringUtils.checkSanityString(requestIdNew, globalExecutionStateNew,
-                                    globalExecutionStatusNew);
-    } catch (InvalidParseOperationException | IllegalArgumentException e) {
+      ParametersChecker.checkSanityString(requestIdNew, globalExecutionStateNew,
+                                          globalExecutionStatusNew);
+    } catch (IllegalArgumentException | InvalidArgumentException e) {
       logger.error(e);
       throw new IllegalArgumentException(e.getMessage(), e);
     }

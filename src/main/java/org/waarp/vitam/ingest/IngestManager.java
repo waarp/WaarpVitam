@@ -37,17 +37,11 @@ import fr.gouv.vitam.common.stream.StreamUtils;
 import fr.gouv.vitam.ingest.external.api.exception.IngestExternalException;
 import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
 import org.apache.commons.io.FileUtils;
-import org.waarp.common.database.exception.WaarpDatabaseException;
+import org.waarp.common.logging.SysErrLogger;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
-import org.waarp.openr66.client.SubmitTransfer;
-import org.waarp.openr66.database.DbConstantR66;
-import org.waarp.openr66.database.data.DbHostAuth;
-import org.waarp.openr66.database.data.DbTaskRunner;
-import org.waarp.openr66.protocol.configuration.Configuration;
-import org.waarp.openr66.protocol.exception.OpenR66ProtocolNoSslException;
-import org.waarp.openr66.protocol.utils.R66Future;
-import org.waarp.vitam.OperationCheck;
+import org.waarp.common.utility.WaarpThreadFactory;
+import org.waarp.vitam.common.OperationCheck;
 
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
@@ -61,6 +55,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static java.nio.file.StandardCopyOption.*;
 import static org.waarp.vitam.ingest.IngestRequest.*;
@@ -69,7 +66,7 @@ import static org.waarp.vitam.ingest.IngestRequest.*;
  * IngestManager is the central logic for Ingest management between Waarp and
  * Vitam
  */
-public class IngestManager {
+public class IngestManager implements Runnable {
   /**
    * Prefix of File Information for ATR_FAILED
    */
@@ -104,10 +101,24 @@ public class IngestManager {
       "#OUTCOME_DETAIL_MESSAGE#";
   private static final String ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR =
       "Issue since ingest packet produces an error";
-  IngestManagerToWaarp ingestManagerToWaarp = new IngestManagerToWaarp();
+
+  private IngestRequest ingestRequest;
+  private AdminExternalClient adminExternalClient;
+  private IngestExternalClient client;
+  private IngestRequestFactory ingestRequestFactory;
 
   IngestManager() {
     // Empty
+  }
+
+  private IngestManager(final IngestRequest ingestRequest,
+                        final AdminExternalClient adminExternalClient,
+                        final IngestExternalClient client,
+                        final IngestRequestFactory ingestRequestFactory) {
+    this.ingestRequest = ingestRequest;
+    this.adminExternalClient = adminExternalClient;
+    this.client = client;
+    this.ingestRequestFactory = ingestRequestFactory;
   }
 
   /**
@@ -228,35 +239,63 @@ public class IngestManager {
    * @param ingestRequestFactory
    * @param client
    * @param adminExternalClient
-   * @param stopFile
+   * @param ingestMonitor
    */
   void retryAllExistingFiles(final IngestRequestFactory ingestRequestFactory,
                              final IngestExternalClient client,
                              final AdminExternalClient adminExternalClient,
-                             File stopFile) {
+                             final IngestMonitor ingestMonitor) {
+    List<IngestRequest> ingestRequests =
+        ingestRequestFactory.getExistingIngests();
+    if (ingestRequests.isEmpty()) {
+      return;
+    }
+    ExecutorService executorService = Executors
+        .newFixedThreadPool(ingestRequests.size(),
+                            new WaarpThreadFactory("IngestManager"));
+    for (IngestRequest ingestRequest : ingestRequests) {
+      if (ingestMonitor.isShutdown()) {
+        return;
+      }
+      IngestManager task =
+          new IngestManager(ingestRequest, adminExternalClient, client,
+                            ingestRequestFactory);
+      executorService.execute(task);
+    }
     try {
-      List<IngestRequest> ingestRequests =
-          ingestRequestFactory.getExistingIngests();
-      for (IngestRequest ingestRequest : ingestRequests) {
-        if (stopFile.exists()) {
-          return;
+      Thread.sleep(ingestMonitor.getElapseTime());
+    } catch (InterruptedException e) {//NOSONAR
+      SysErrLogger.FAKE_LOGGER.ignoreLog(e);
+    }
+    executorService.shutdown();
+    while (!executorService.isTerminated()) {
+      try {
+        executorService.awaitTermination(ingestMonitor.getElapseTime(),
+                                         TimeUnit.MILLISECONDS);
+      } catch (InterruptedException e) {//NOSONAR
+        SysErrLogger.FAKE_LOGGER.ignoreLog(e);
+      }
+    }
+    executorService.shutdownNow();
+  }
+
+  @Override
+  public void run() {
+    logger.warn("Will run {}", ingestRequest);
+    try {
+      while (runStep(ingestRequestFactory, client, adminExternalClient,
+                     ingestRequest)) {
+        // Executing next step
+        if (ingestRequest.getStep() == null) {
+          // END
+          break;
         }
-        logger.warn("Will run {}", ingestRequest);
-        while (runStep(ingestRequestFactory, client, adminExternalClient,
-                       ingestRequest)) {
-          // Executing next step
-          if (ingestRequest.getStep() == null) {
-            // END
-            break;
-          }
-          logger.debug("Will rerun {}", ingestRequest);
-        }
+        logger.debug("Will rerun {}", ingestRequest);
       }
     } catch (InvalidParseOperationException e) {
       // very bad
       logger.error("Very bad since cannot save IngestRequest", e);
     }
-
   }
 
   /**
@@ -423,9 +462,11 @@ public class IngestManager {
       }
       ingestRequest
           .setStep(IngestStep.RETRY_INGEST_ID, 0, ingestRequestFactory);
-      if (ingestManagerToWaarp
-          .sendBackInformation(ingestRequestFactory, ingestRequest,
-                               idMessage.getAbsolutePath(), INGEST_ID)) {
+      if (ingestRequestFactory.getManagerToWaarp(ingestRequest)
+                              .sendBackInformation(ingestRequestFactory,
+                                                   ingestRequest,
+                                                   idMessage.getAbsolutePath(),
+                                                   INGEST_ID)) {
         // Possibly (optional) waiting for ATR back or not
         if (ingestRequest.isCheckAtr()) {
           ingestRequest.setStep(IngestStep.RETRY_ATR, 0, ingestRequestFactory);
@@ -552,9 +593,11 @@ public class IngestManager {
       throws InvalidParseOperationException {
     ingestRequest
         .setStep(IngestStep.RETRY_ATR_FORWARD, 0, ingestRequestFactory);
-    if (!ingestManagerToWaarp
-        .sendBackInformation(ingestRequestFactory, ingestRequest,
-                             targetFile.getAbsolutePath(), ATR)) {
+    if (!ingestRequestFactory.getManagerToWaarp(ingestRequest)
+                             .sendBackInformation(ingestRequestFactory,
+                                                  ingestRequest,
+                                                  targetFile.getAbsolutePath(),
+                                                  ATR)) {
       // ATR already there but not sent, so retry
       ingestRequest
           .setStep(IngestStep.RETRY_ATR_FORWARD, 0, ingestRequestFactory);
@@ -619,94 +662,15 @@ public class IngestManager {
         return;
       }
     }
-    if (ingestManagerToWaarp
-        .sendBackInformation(ingestRequestFactory, ingestRequest,
-                             file.getAbsolutePath(), ATR_FAILED)) {
+    if (ingestRequestFactory.getManagerToWaarp(ingestRequest)
+                            .sendBackInformation(ingestRequestFactory,
+                                                 ingestRequest,
+                                                 file.getAbsolutePath(),
+                                                 ATR_FAILED)) {
       // Very end of this IngestRequest
       toDelete(ingestRequestFactory, ingestRequest);
     }
     // else Since not sent, will retry later on: keep as is
-  }
-
-  /**
-   * Class to allow Mock of Waarp sending back to Waarp Partner
-   */
-  static class IngestManagerToWaarp {
-    IngestManagerToWaarp() {
-      // nothing
-    }
-
-    /**
-     * Launch a SubmitTransfer according to arguments
-     *
-     * @param ingestRequestFactory
-     * @param ingestRequest
-     * @param filename
-     *
-     * @return True if done
-     *
-     * @throws InvalidParseOperationException
-     */
-    boolean sendBackInformation(final IngestRequestFactory ingestRequestFactory,
-                                final IngestRequest ingestRequest,
-                                final String filename, final String fileInfo)
-        throws InvalidParseOperationException {
-      logger.debug("Will send {} while step is {}", filename,
-                   ingestRequest.getStep());
-      R66Future future = new R66Future(true);
-      SubmitTransfer submitTransfer =
-          new SubmitTransfer(future, ingestRequest.getWaarpPartner(), filename,
-                             ingestRequest.getWaarpRule(),
-                             ingestRequest.getRequestId() + ' ' + fileInfo,
-                             true, Configuration.configuration.getBlockSize(),
-                             DbConstantR66.ILLEGALVALUE, null);
-      submitTransfer.run();
-      future.awaitOrInterruptible();
-      if (future.isSuccess()) {
-        ingestRequest.setWaarpId(future.getResult().getRunner().getSpecialId());
-        ingestRequest.save(ingestRequestFactory);
-        return waitForAllDone(ingestRequest);
-      }
-      return false;
-    }
-
-    /**
-     * Ensure that SubmitTransfer is done totally (file sent) before continuing
-     *
-     * @param ingestRequest
-     *
-     * @return True if done
-     */
-    private boolean waitForAllDone(IngestRequest ingestRequest) {
-      while (true) {
-        try {
-          DbHostAuth dbHostAuth =
-              new DbHostAuth(ingestRequest.getWaarpPartner());
-          DbTaskRunner checkedRunner =
-              new DbTaskRunner(ingestRequest.getWaarpId(),
-                               Configuration.configuration
-                                   .getHostId(dbHostAuth.isSsl()),
-                               ingestRequest.getWaarpPartner());
-          if (checkedRunner.isAllDone()) {
-            logger.info("DbTaskRunner done");
-            return true;
-          } else if (checkedRunner.isInError()) {
-            logger.warn("DbTaskRunner in error for {}", ingestRequest);
-            return false;
-          }
-          Thread.sleep(500);
-        } catch (InterruptedException e) {//NOSONAR
-          logger.error("Interrupted", e);
-          return false;
-        } catch (WaarpDatabaseException e) {
-          logger.error("Cannot found DbTaskRunner", e);
-          return false;
-        } catch (OpenR66ProtocolNoSslException e) {
-          logger.error("Cannot found HostSslId", e);
-          return false;
-        }
-      }
-    }
   }
 
 }

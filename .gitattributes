@@ -16,5 +16,5 @@
 *.png binary
 *.jpg binary
 *.jar binary
-/lib/phantomjs*
+/lib/phantomjs* binary
 

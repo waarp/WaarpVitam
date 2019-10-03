@@ -32,17 +32,11 @@ import fr.gouv.vitam.common.model.RequestResponse;
 import fr.gouv.vitam.common.model.RequestResponseOK;
 import fr.gouv.vitam.common.stream.StreamUtils;
 import org.apache.commons.io.FileUtils;
-import org.waarp.common.database.exception.WaarpDatabaseException;
+import org.waarp.common.logging.SysErrLogger;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
-import org.waarp.openr66.client.SubmitTransfer;
-import org.waarp.openr66.database.DbConstantR66;
-import org.waarp.openr66.database.data.DbHostAuth;
-import org.waarp.openr66.database.data.DbTaskRunner;
-import org.waarp.openr66.protocol.configuration.Configuration;
-import org.waarp.openr66.protocol.exception.OpenR66ProtocolNoSslException;
-import org.waarp.openr66.protocol.utils.R66Future;
-import org.waarp.vitam.OperationCheck;
+import org.waarp.common.utility.WaarpThreadFactory;
+import org.waarp.vitam.common.OperationCheck;
 import org.waarp.vitam.dip.DipRequest.DIPStep;
 
 import javax.ws.rs.core.Response;
@@ -54,6 +48,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static java.nio.file.StandardCopyOption.*;
 
@@ -61,7 +58,7 @@ import static java.nio.file.StandardCopyOption.*;
  * DipManager is the central logic for DIP management between Waarp and
  * Vitam
  */
-public class DipManager {
+public class DipManager implements Runnable {
   /**
    * Prefix of File Information for DIP_FAILED
    */
@@ -78,10 +75,24 @@ public class DipManager {
       WaarpLoggerFactory.getLogger(DipManager.class);
   private static final String ISSUE_SINCE_SELECT_PRODUCES_AN_ERROR =
       "Issue since Select produces an error";
-  DipManagerToWaarp dipManagerToWaarp = new DipManagerToWaarp();
+
+  private DipRequest dipRequest;
+  private AdminExternalClient adminExternalClient;
+  private AccessExternalClient client;
+  private DipRequestFactory dipRequestFactory;
 
   DipManager() {
     // Empty
+  }
+
+  private DipManager(final DipRequest dipRequest,
+                     final AdminExternalClient adminExternalClient,
+                     final AccessExternalClient client,
+                     final DipRequestFactory dipRequestFactory) {
+    this.dipRequest = dipRequest;
+    this.adminExternalClient = adminExternalClient;
+    this.client = client;
+    this.dipRequestFactory = dipRequestFactory;
   }
 
   /**
@@ -91,34 +102,61 @@ public class DipManager {
    * @param dipRequestFactory
    * @param client
    * @param adminExternalClient
-   * @param stopFile
+   * @param dipMonitor
    */
   void retryAllExistingFiles(final DipRequestFactory dipRequestFactory,
                              final AccessExternalClient client,
                              final AdminExternalClient adminExternalClient,
-                             File stopFile) {
+                             final DipMonitor dipMonitor) {
+    List<DipRequest> dipRequests = dipRequestFactory.getExistingDips();
+    if (dipRequests.isEmpty()) {
+      return;
+    }
+    ExecutorService executorService = Executors
+        .newFixedThreadPool(dipRequests.size(),
+                            new WaarpThreadFactory("DipManager"));
+    for (DipRequest dipRequest : dipRequests) {
+      if (dipMonitor.isShutdown()) {
+        return;
+      }
+      DipManager task = new DipManager(dipRequest, adminExternalClient, client,
+                                       dipRequestFactory);
+      executorService.execute(task);
+    }
     try {
-      List<DipRequest> dipRequests = dipRequestFactory.getExistingDips();
-      for (DipRequest dipRequest : dipRequests) {
-        if (stopFile.exists()) {
-          return;
+      Thread.sleep(dipMonitor.getElapseTime());
+    } catch (InterruptedException e) {//NOSONAR
+      SysErrLogger.FAKE_LOGGER.ignoreLog(e);
+    }
+    executorService.shutdown();
+    while (!executorService.isTerminated()) {
+      try {
+        executorService.awaitTermination(dipMonitor.getElapseTime(),
+                                         TimeUnit.MILLISECONDS);
+      } catch (InterruptedException e) {//NOSONAR
+        SysErrLogger.FAKE_LOGGER.ignoreLog(e);
+      }
+    }
+    executorService.shutdownNow();
+  }
+
+  @Override
+  public void run() {
+    logger.warn("Will run {}", dipRequest);
+    try {
+      while (runStep(dipRequestFactory, client, adminExternalClient,
+                     dipRequest)) {
+        // Executing next step
+        if (dipRequest.getStep() == null) {
+          // END
+          break;
         }
-        logger.warn("Will run {}", dipRequest);
-        while (runStep(dipRequestFactory, client, adminExternalClient,
-                       dipRequest)) {
-          // Executing next step
-          if (dipRequest.getStep() == null) {
-            // END
-            break;
-          }
-          logger.debug("Will rerun {}", dipRequest);
-        }
+        logger.debug("Will rerun {}", dipRequest);
       }
     } catch (InvalidParseOperationException e) {
       // very bad
       logger.error("Very bad since cannot save DipRequest", e);
     }
-
   }
 
   /**
@@ -344,7 +382,8 @@ public class DipManager {
                            final DipRequest dipRequest, final File targetFile)
       throws InvalidParseOperationException {
     dipRequest.setStep(DIPStep.RETRY_DIP_FORWARD, 0, dipRequestFactory);
-    if (!dipManagerToWaarp.sendBackInformation(dipRequestFactory, dipRequest,
+    if (!dipRequestFactory.getManagerToWaarp(dipRequest)
+                          .sendBackInformation(dipRequestFactory, dipRequest,
                                                targetFile.getAbsolutePath(),
                                                DIP)) {
       // ATR already there but not sent, so retry
@@ -405,7 +444,8 @@ public class DipManager {
         return;
       }
     }
-    if (dipManagerToWaarp.sendBackInformation(dipRequestFactory, dipRequest,
+    if (dipRequestFactory.getManagerToWaarp(dipRequest)
+                         .sendBackInformation(dipRequestFactory, dipRequest,
                                               file.getAbsolutePath(),
                                               DIP_FAILED)) {
       // Very end of this IngestRequest
@@ -421,87 +461,4 @@ public class DipManager {
                                         .setState("code_vitam").setMessage(msg)
                                         .setDescription(description);
   }
-
-  /**
-   * Class to allow Mock of Waarp sending back to Waarp Partner
-   */
-  static class DipManagerToWaarp {
-    DipManagerToWaarp() {
-      // nothing
-    }
-
-    /**
-     * Launch a SubmitTransfer according to arguments
-     *
-     * @param dipRequestFactory
-     * @param dipRequest
-     * @param filename
-     *
-     * @return True if done
-     *
-     * @throws InvalidParseOperationException
-     */
-    boolean sendBackInformation(final DipRequestFactory dipRequestFactory,
-                                final DipRequest dipRequest,
-                                final String filename, final String fileInfo)
-        throws InvalidParseOperationException {
-      logger.debug("Will send {} while step is {}", filename,
-                   dipRequest.getStep());
-      R66Future future = new R66Future(true);
-      SubmitTransfer submitTransfer =
-          new SubmitTransfer(future, dipRequest.getWaarpPartner(), filename,
-                             dipRequest.getWaarpRule(),
-                             dipRequest.getRequestId() + ' ' + fileInfo, true,
-                             Configuration.configuration.getBlockSize(),
-                             DbConstantR66.ILLEGALVALUE, null);
-      submitTransfer.run();
-      future.awaitOrInterruptible();
-      if (future.isSuccess()) {
-        dipRequest.setWaarpId(future.getResult().getRunner().getSpecialId());
-        dipRequest.save(dipRequestFactory);
-        return waitForAllDone(dipRequest);
-      }
-      return false;
-    }
-
-    /**
-     * Ensure that SubmitTransfer is done totally (file sent) before continuing
-     *
-     * @param dipRequest
-     *
-     * @return True if done
-     */
-    private boolean waitForAllDone(DipRequest dipRequest) {
-      while (true) {
-        try {
-          DbHostAuth dbHostAuth = new DbHostAuth(dipRequest.getWaarpPartner());
-          DbTaskRunner checkedRunner = new DbTaskRunner(dipRequest.getWaarpId(),
-                                                        Configuration.configuration
-                                                            .getHostId(
-                                                                dbHostAuth
-                                                                    .isSsl()),
-                                                        dipRequest
-                                                            .getWaarpPartner());
-          if (checkedRunner.isAllDone()) {
-            logger.info("DbTaskRunner done");
-            return true;
-          } else if (checkedRunner.isInError()) {
-            logger.warn("DbTaskRunner in error for {}", dipRequest);
-            return false;
-          }
-          Thread.sleep(500);
-        } catch (InterruptedException e) {//NOSONAR
-          logger.error("Interrupted", e);
-          return false;
-        } catch (WaarpDatabaseException e) {
-          logger.error("Cannot found DbTaskRunner", e);
-          return false;
-        } catch (OpenR66ProtocolNoSslException e) {
-          logger.error("Cannot found HostSslId", e);
-          return false;
-        }
-      }
-    }
-  }
-
 }

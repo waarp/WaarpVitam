@@ -31,7 +31,8 @@
 
   <inceptionYear>2019</inceptionYear>
   <description>Waarp integration for Vitam, for Ingest (upload) of SIP and for
-    export of DIP</description>
+    export of DIP
+  </description>
   <organization>
     <name>Waarp</name>
     <url>http://www.waarp.fr</url>
@@ -296,7 +297,8 @@
     <maven-enforcer-plugin.version>3.0.0-M2
     </maven-enforcer-plugin.version><!-- 1.3.1 -->
     <versions-maven-plugin.version>2.7</versions-maven-plugin.version>
-    <animal-sniffer-maven-plugin.version>1.18</animal-sniffer-maven-plugin.version>
+    <animal-sniffer-maven-plugin.version>1.18
+    </animal-sniffer-maven-plugin.version>
     <ant.version>1.10.6</ant.version><!-- 1.8.2 -->
     <apiviz.version>1.3.4</apiviz.version>
     <maven-shade-plugin>3.2.1</maven-shade-plugin>
@@ -884,7 +886,8 @@
             <plugin>
               <groupId>com.h3xstream.findsecbugs</groupId>
               <artifactId>findsecbugs-plugin</artifactId>
-              <version>LATEST</version> <!-- Auto-update to the latest stable -->
+              <version>LATEST
+              </version> <!-- Auto-update to the latest stable -->
             </plugin>
             <plugin>
               <groupId>com.mebigfatguy.sb-contrib</groupId>
@@ -940,7 +943,7 @@
   <profiles>
     <profile>
       <id>release</id>
-	<distributionManagement>
+      <distributionManagement>
         <repository>
           <id>centralArtifactory</id>
           <name>Local Artifactory-releases</name>
@@ -1303,6 +1306,11 @@
           </exclusion>
         </exclusions>
       </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-exec</artifactId>
+        <version>${commons-exec.version}</version>
+      </dependency>
 
       <!-- ####################### Vitam Dependencies #################### -->
       <dependency>
@@ -1609,11 +1617,26 @@
       <groupId>Waarp</groupId>
       <artifactId>WaarpR66</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-exec</artifactId>
+    </dependency>
     <!-- test -->
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.ant</groupId>
+      <artifactId>ant</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>com.sun</groupId>
+          <artifactId>tools</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
@@ -1643,11 +1666,6 @@
     <dependency>
       <groupId>fr.gouv.vitam</groupId>
       <artifactId>common-junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.ant</groupId>
-      <artifactId>ant</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

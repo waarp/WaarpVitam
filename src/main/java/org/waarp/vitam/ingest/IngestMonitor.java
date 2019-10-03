@@ -32,10 +32,14 @@ import org.apache.commons.cli.ParseException;
 import org.waarp.common.logging.WaarpLogger;
 import org.waarp.common.logging.WaarpLoggerFactory;
 import org.waarp.common.utility.Version;
+import org.waarp.common.utility.WaarpShutdownHook;
 import org.waarp.openr66.configuration.FileBasedConfiguration;
 import org.waarp.openr66.protocol.configuration.Configuration;
-import org.waarp.vitam.WaarpCommon;
-import org.waarp.vitam.WaarpCommon.MonitorOption;
+import org.waarp.vitam.common.WaarpCommon;
+import org.waarp.vitam.common.WaarpCommon.MonitorOption;
+import org.waarp.vitam.common.WaarpMonitor;
+import org.waarp.vitam.common.WaarpVitamShutdownHook;
+import org.waarp.vitam.common.WaarpVitamShutdownHook.WaarpVitamShutdownConfiguration;
 
 import java.io.File;
 
@@ -43,18 +47,17 @@ import java.io.File;
  * IngestMonitor is the daemon taking care of IngestRequests through a
  * directory containing JSON files
  */
-public class IngestMonitor {
+public class IngestMonitor extends WaarpMonitor {
   /**
    * Internal Logger
    */
   private static final WaarpLogger logger =
       WaarpLoggerFactory.getLogger(IngestMonitor.class);
+
   private static File waarpConfigurationFile;
-  private final long elapseTime;
-  private final File stopFile;
+
   private final IngestRequestFactory factory;
   private final IngestManager ingestManager;
-  private final AdminExternalClientFactory adminFactory;
 
   /**
    * Unique constructor
@@ -68,11 +71,13 @@ public class IngestMonitor {
                 final IngestRequestFactory factory,
                 final AdminExternalClientFactory adminFactory,
                 final IngestManager ingestManager) {
-    this.elapseTime = elapseTime;
-    this.stopFile = stopFile;
+    super(stopFile, adminFactory, elapseTime);
     this.factory = factory;
-    this.adminFactory = adminFactory;
     this.ingestManager = ingestManager;
+    if (WaarpShutdownHook.shutdownHook == null) {
+      new WaarpVitamShutdownHook(new WaarpVitamShutdownConfiguration(this));
+      WaarpVitamShutdownHook.addShutdownHook();
+    }
   }
 
   /**
@@ -162,17 +167,19 @@ public class IngestMonitor {
    */
   public void invoke() {
     try (IngestExternalClient client = factory.getClient();
-         AdminExternalClient adminExternalClient = adminFactory.getClient()) {
+         AdminExternalClient adminExternalClient = getAdminFactory()
+             .getClient()) {
       logger.warn("Start of {}", IngestMonitor.class.getName());
-      while (!stopFile.exists()) {
+      while (!isShutdown()) {
         ingestManager
-            .retryAllExistingFiles(factory, client, adminExternalClient,
-                                   stopFile);
-        Thread.sleep(elapseTime);
+            .retryAllExistingFiles(factory, client, adminExternalClient, this);
+        Thread.sleep(getElapseTime());
       }
+      setShutdown(true);
       logger.warn("Stop of {}", IngestMonitor.class.getName());
     } catch (InterruptedException e) {//NOSONAR
       logger.error("{} will stop", IngestMonitor.class.getName(), e);
     }
   }
+
 }
