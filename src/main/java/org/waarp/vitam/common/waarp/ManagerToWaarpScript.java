@@ -83,84 +83,12 @@ class ManagerToWaarpScript implements ManagerToWaarp {
     commandLine.addArgument(filename);
     commandLine.addArgument(fileInfo);
 
-    final DefaultExecutor defaultExecutor = new DefaultExecutor();
-    ByteArrayOutputStream outputStream;
-    outputStream = new ByteArrayOutputStream();
-    final PumpStreamHandler pumpStreamHandler =
-        new PumpStreamHandler(outputStream);
-    defaultExecutor.setStreamHandler(pumpStreamHandler);
-    final int[] correctValues = { 0, 1 };
-    defaultExecutor.setExitValues(correctValues);
-    int status = -1;
-    try {
-      // Execute the command
-      status = defaultExecutor.execute(commandLine);//NOSONAR
-    } catch (final ExecuteException e) {
-      if (e.getExitValue() == -559038737) {
-        // Cannot run immediately so retry once
-        try {
-          Thread.sleep(10);
-        } catch (final InterruptedException e1) {//NOSONAR
-          SysErrLogger.FAKE_LOGGER.ignoreLog(e1);
-        }
-        try {
-          status = defaultExecutor.execute(commandLine);//NOSONAR
-        } catch (final ExecuteException e1) {
-          try {
-            pumpStreamHandler.stop();
-          } catch (final IOException ignored) {
-            // nothing
-          }
-          logger.error(
-              EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-          FileUtils.close(outputStream);
-          return false;
-        } catch (final IOException e1) {
-          try {
-            pumpStreamHandler.stop();
-          } catch (final IOException ignored) {
-            // nothing
-          }
-          logger.error(
-              EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-          FileUtils.close(outputStream);
-          return false;
-        }
-      } else {
-        try {
-          pumpStreamHandler.stop();
-        } catch (final IOException ignored) {
-          // nothing
-        }
-        logger.error(
-            EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-        FileUtils.close(outputStream);
-        return false;
-      }
-    } catch (final IOException e) {
-      try {
-        pumpStreamHandler.stop();
-      } catch (final IOException ignored) {
-        // nothing
-      }
-      logger
-          .error(EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-      FileUtils.close(outputStream);
+    StatusIdResult statusIdResult = new StatusIdResult(commandLine).invoke();
+    if (statusIdResult.isKO()) {
       return false;
     }
-    try {
-      pumpStreamHandler.stop();
-    } catch (final IOException ignored) {
-      // nothing
-    }
-    String response;
-    try {
-      response = outputStream.toString(WaarpStringUtils.UTF8.name());
-    } catch (final UnsupportedEncodingException e) {
-      response = outputStream.toString();
-    }
-    long waarpId = Long.parseLong(response);
-    FileUtils.close(outputStream);
+    int status = statusIdResult.getStatus();
+    long waarpId = statusIdResult.getWaarpId();
     if (status == 0) {
       ingestRequest.setWaarpId(waarpId);
       ingestRequest.save(ingestRequestFactory);
@@ -188,84 +116,12 @@ class ManagerToWaarpScript implements ManagerToWaarp {
     commandLine.addArgument(filename);
     commandLine.addArgument(fileInfo);
 
-    final DefaultExecutor defaultExecutor = new DefaultExecutor();
-    ByteArrayOutputStream outputStream;
-    outputStream = new ByteArrayOutputStream();
-    final PumpStreamHandler pumpStreamHandler =
-        new PumpStreamHandler(outputStream);
-    defaultExecutor.setStreamHandler(pumpStreamHandler);
-    final int[] correctValues = { 0, 1 };
-    defaultExecutor.setExitValues(correctValues);
-    int status = -1;
-    try {
-      // Execute the command
-      status = defaultExecutor.execute(commandLine);//NOSONAR
-    } catch (final ExecuteException e) {
-      if (e.getExitValue() == -559038737) {
-        // Cannot run immediately so retry once
-        try {
-          Thread.sleep(10);
-        } catch (final InterruptedException e1) {//NOSONAR
-          SysErrLogger.FAKE_LOGGER.ignoreLog(e1);
-        }
-        try {
-          status = defaultExecutor.execute(commandLine);//NOSONAR
-        } catch (final ExecuteException e1) {
-          try {
-            pumpStreamHandler.stop();
-          } catch (final IOException ignored) {
-            // nothing
-          }
-          logger.error(
-              EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-          FileUtils.close(outputStream);
-          return false;
-        } catch (final IOException e1) {
-          try {
-            pumpStreamHandler.stop();
-          } catch (final IOException ignored) {
-            // nothing
-          }
-          logger.error(
-              EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-          FileUtils.close(outputStream);
-          return false;
-        }
-      } else {
-        try {
-          pumpStreamHandler.stop();
-        } catch (final IOException ignored) {
-          // nothing
-        }
-        logger.error(
-            EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-        FileUtils.close(outputStream);
-        return false;
-      }
-    } catch (final IOException e) {
-      try {
-        pumpStreamHandler.stop();
-      } catch (final IOException ignored) {
-        // nothing
-      }
-      logger
-          .error(EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
-      FileUtils.close(outputStream);
+    StatusIdResult statusIdResult = new StatusIdResult(commandLine).invoke();
+    if (statusIdResult.isKO()) {
       return false;
     }
-    try {
-      pumpStreamHandler.stop();
-    } catch (final IOException ignored) {
-      // nothing
-    }
-    String response;
-    try {
-      response = outputStream.toString(WaarpStringUtils.UTF8.name());
-    } catch (final UnsupportedEncodingException e) {
-      response = outputStream.toString();
-    }
-    long waarpId = Long.parseLong(response);
-    FileUtils.close(outputStream);
+    int status = statusIdResult.getStatus();
+    long waarpId = statusIdResult.getWaarpId();
     if (status == 0) {
       dipRequest.setWaarpId(waarpId);
       dipRequest.save(dipRequestFactory);
@@ -273,4 +129,113 @@ class ManagerToWaarpScript implements ManagerToWaarp {
     return status == 0;
   }
 
+  private class StatusIdResult {
+    private final CommandLine commandLine;
+    private boolean myResult;
+    private int status;
+    private long waarpId;
+
+    public StatusIdResult(final CommandLine commandLine) {
+      this.commandLine = commandLine;
+    }
+
+    boolean isKO() {
+      return myResult;
+    }
+
+    public int getStatus() {
+      return status;
+    }
+
+    public long getWaarpId() {
+      return waarpId;
+    }
+
+    public StatusIdResult invoke() {
+      final DefaultExecutor defaultExecutor = new DefaultExecutor();
+      ByteArrayOutputStream outputStream;
+      outputStream = new ByteArrayOutputStream();
+      final PumpStreamHandler pumpStreamHandler =
+          new PumpStreamHandler(outputStream);
+      defaultExecutor.setStreamHandler(pumpStreamHandler);
+      final int[] correctValues = { 0, 1 };
+      defaultExecutor.setExitValues(correctValues);
+      status = -1;
+      try {
+        // Execute the command
+        status = defaultExecutor.execute(commandLine);//NOSONAR
+      } catch (final ExecuteException e) {
+        if (e.getExitValue() == -559038737) {
+          // Cannot run immediately so retry once
+          try {
+            Thread.sleep(10);
+          } catch (final InterruptedException e1) {//NOSONAR
+            SysErrLogger.FAKE_LOGGER.ignoreLog(e1);
+          }
+          try {
+            status = defaultExecutor.execute(commandLine);//NOSONAR
+          } catch (final ExecuteException e1) {
+            try {
+              pumpStreamHandler.stop();
+            } catch (final IOException ignored) {
+              // nothing
+            }
+            logger.error(
+                EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
+            FileUtils.close(outputStream);
+            myResult = true;
+            return this;
+          } catch (final IOException e1) {
+            try {
+              pumpStreamHandler.stop();
+            } catch (final IOException ignored) {
+              // nothing
+            }
+            logger.error(
+                EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
+            FileUtils.close(outputStream);
+            myResult = true;
+            return this;
+          }
+        } else {
+          try {
+            pumpStreamHandler.stop();
+          } catch (final IOException ignored) {
+            // nothing
+          }
+          logger.error(
+              EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
+          FileUtils.close(outputStream);
+          myResult = true;
+          return this;
+        }
+      } catch (final IOException e) {
+        try {
+          pumpStreamHandler.stop();
+        } catch (final IOException ignored) {
+          // nothing
+        }
+        logger
+            .error(EXCEPTION + e.getMessage() + EXEC_IN_ERROR_WITH + commandLine);
+        FileUtils.close(outputStream);
+        myResult = true;
+        return this;
+      }
+      try {
+        pumpStreamHandler.stop();
+      } catch (final IOException ignored) {
+        // nothing
+      }
+      String response;
+      try {
+        response = outputStream.toString(WaarpStringUtils.UTF8.name());
+      } catch (final UnsupportedEncodingException e) {
+        response = outputStream.toString();
+      }
+      waarpId = Long.parseLong(response);
+      FileUtils.close(outputStream);
+      myResult = false;
+      return this;
+    }
+  }
 }
