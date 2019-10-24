@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# TODO: better use dh-systemd, Cf. https://wiki.debian.org/Teams/pkg-systemd/Packaging
+ if [ -x /bin/systemctl ]; then
+   echo Allow DIP with      systemctl enable waarp-vitam-dip.service
+   echo Allow INGEST with   systemctl enable waarp-vitam-ingest.service
+   echo Allow R66 with      systemctl enable waarp-vitam-r66.service
+fi
