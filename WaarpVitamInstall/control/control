@@ -1,0 +1,9 @@
+Package: waarp-vitam
+Version: [[version]]
+Section: Application/Archiving
+Priority: low
+Architecture: all
+Depends: openjdk-8-jre-headless, systemd
+Build-Depends: dh-systemd
+Maintainer: Waarp Team
+Description: [[description]]

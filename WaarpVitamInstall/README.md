@@ -58,7 +58,7 @@ Once copied in the correct directory, go to the base directory (for instance:
 
 Run `./scripts/r66/install-module.sh path_to_Waarp-Vitam.jar` 
 which will rewrite all files replacing `%ROOT%` by the
-current directory and copy the `Waarp-Vitam-1.0.1-jar-with-dependencies.jar` 
+current directory and copy the `Waarp-Vitam-X.Y.Z-jar-with-dependencies.jar` 
 into `%ROOT%/lib/r66/` directory
 (`mvn clean install` to generate this jar into target directory).
 

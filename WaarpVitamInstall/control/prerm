@@ -1,0 +1,22 @@
+#!/bin/sh
+case "$1" in
+  remove|upgrade|deconfigure)
+    # systemd: On uninstall (not upgrade), disable and stop the unit
+    if [ -x /bin/systemctl ]; then
+      systemctl --no-reload disable waarp-vitam-dip.service >/dev/null 2>&1 || true
+      systemctl stop waarp-vitam-dip.service >/dev/null 2>&1 || true
+      systemctl --no-reload disable waarp-vitam-ingest.service >/dev/null 2>&1 || true
+      systemctl stop waarp-vitam-ingest.service >/dev/null 2>&1 || true
+      systemctl --no-reload disable waarp-vitam-r66.service >/dev/null 2>&1 || true
+      systemctl stop waarp-vitam-r66.service >/dev/null 2>&1 || true
+    fi
+    ;;
+
+  failed-upgrade)
+    ;;
+
+  *)
+    echo "prerm called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
