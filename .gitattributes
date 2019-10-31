@@ -5,9 +5,10 @@
 # to native line endings on checkout.
 *.c text
 *.h text
-*.java text
-*.xml text
-*.html text
+*.java text linguist-detectable=true
+*.xml text linguist-detectable=false
+*.html text linguist-detectable=false
+*.js text linguist-detectable=false
 
 # Declare files that will always have CRLF line endings on checkout.
 *.sln text eol=crlf
