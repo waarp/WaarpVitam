@@ -30,7 +30,9 @@
   <name>Waarp Vitam Module</name>
 
   <inceptionYear>2019</inceptionYear>
-  <description>Waarp integration for Vitam, for Ingest (upload) of SIP and for export of DIP</description>
+  <description>Waarp integration for Vitam, for Ingest (upload) of SIP and for
+    export of DIP
+  </description>
   <organization>
     <name>Waarp</name>
     <url>http://www.waarp.fr</url>
@@ -165,7 +167,7 @@
     <repository>
       <id>Vitam repository</id>
       <url>
-        http://download.programmevitam.fr/vitam_repository/${vitam.version}/mvn_repo/
+	http://download.programmevitam.fr/vitam_repository/${vitam.version}/mvn_repo/
       </url>
     </repository>
   </repositories>
@@ -175,6 +177,8 @@
     <module.project>false</module.project>
     <reuseThreadTest>false</reuseThreadTest>
     <java.version>1.8</java.version>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <attach-distribution>false</attach-distribution>
@@ -182,23 +186,19 @@
 
     <!-- Sonar -->
     <sonar.core.codeCoveragePlugin>jacoco</sonar.core.codeCoveragePlugin>
-    <jacoco-maven-plugin.version>0.8.4</jacoco-maven-plugin.version>
-    <sonar-maven-plugin.version>3.6.1.1688</sonar-maven-plugin.version>
-    <sonar.sources>src/main/java</sonar.sources>
+    <sonar.sourceEncoding>UTF-8</sonar.sourceEncoding>
+    <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
+    <jacoco-maven-plugin.version>0.8.5</jacoco-maven-plugin.version>
+    <sonar-maven-plugin.version>3.7.0.1746</sonar-maven-plugin.version>
     <sonar.tests>src/test/java</sonar.tests>
     <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
     <sonar.language>java</sonar.language>
     <sonar.skipDesign>true</sonar.skipDesign>
-    <jacoco.outputDir>${root.directory}/target/jacoco</jacoco.outputDir>
-    <jacoco.out.ut.file>jacoco-ut.exec</jacoco.out.ut.file>
-    <!-- Tells Sonar where the Jacoco coverage result file is located for Unit Tests -->
-    <sonar.jacoco.reportPaths>${jacoco.outputDir}/${jacoco.out.ut.file}
-    </sonar.jacoco.reportPaths>
-    <!-- Jacoco output file for ITs -->
-    <jacoco.out.it.file>jacoco-it.exec</jacoco.out.it.file>
-    <!-- Tells Sonar where the Jacoco coverage result file is located for Integration Tests -->
-    <sonar.jacoco.itReportPath>${jacoco.outputDir}/${jacoco.out.it.file}
-    </sonar.jacoco.itReportPath>
+    <sonar.sources>src/main/java</sonar.sources>
+    <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
+    <sonar.coverage.jacoco.xmlReportPaths>
+      ${root.directory}/target/site/jacoco/jacoco.xml,${root.directory}/target/site/jacoco-aggregate/jacoco.xml
+    </sonar.coverage.jacoco.xmlReportPaths>
     <sonar.exclusions>
       file:**/test/java/**/*,
       file:**/generated-sources/**/*,
@@ -208,6 +208,7 @@
     <sonar.test.exclusions>
       **/src/test/**/*
     </sonar.test.exclusions>
+    <sonar.java.binaries>${root.directory}/target/classes</sonar.java.binaries>
     <sonar.surefire.reportsPath>target/surefire-reports
     </sonar.surefire.reportsPath>
 
@@ -220,75 +221,96 @@
     <!-- Waarp Versions -->
     <waarp.directory.version>test</waarp.directory.version>
     <waarp.module.version>test</waarp.module.version>
-    <waarp.version>3.3.2</waarp.version>
-    <waarp-vitam.version>1.0.2</waarp-vitam.version>
+    <waarp.version>3.5.1-jre8</waarp.version>
+    <waarp-vitam.version>1.0.3</waarp-vitam.version>
     <revision>${waarp-vitam.version}</revision>
 
     <!-- Dependencies versions -->
-    <vitam3.version>3.0.1</vitam3.version><!-- Upgrade not possible since incompatibility issues on Vitam side -->
+    <vitam.version>3.6.0</vitam.version><!-- Upgrade not possible since incompatibility issues on Vitam side -->
     <!-- Java 11 is one difficulty, all those using Java < 11 are out of version 3 -->
     <!-- But 2 other issues prevent to upgrade: the Java API are the same BUT the API and/or behavior are not,
          thus preventing to upgrade or to use at runtime either version 2 or version 3, since 3 will not anymore
          work for no reason: kind of bad change management examples
     -->
-    <vitam.version>2.15.3</vitam.version>
-		<netty.version>4.1.48.Final</netty.version>
-		<netty-tcnative.version>2.0.30.Final</netty-tcnative.version>
-		<waarp-shaded.version>1.0.1</waarp-shaded.version><!-- Netty HTTP and Selenuum -->
-		<netty.http.version>1.3.1</netty.http.version><!--Java6 shaded version -->
-		<slf4j.version>1.7.30</slf4j.version>
-		<logback.version>1.2.3</logback.version>
-		<guava.version>28.2-jre</guava.version><!--Java6 version -->
-		<commons.compress.version>1.20</commons.compress.version>
-		<commons.daemon.version>1.2.2</commons.daemon.version>
-		<commons.io.version>2.6</commons.io.version>
-		<commons.dbcp.version>1.4</commons.dbcp.version>
-		<commons.pool.version>2.8.0</commons.pool.version>
-		<commons-exec.version>1.3</commons-exec.version>
-		<commons-logging.version>1.2</commons-logging.version>
-		<commons-net.version>3.6</commons-net.version>
-		<commons-codec.version>1.14</commons-codec.version>
-		<commons-beanutils.version>1.8.3</commons-beanutils.version>
-		<commons-cli.version>1.4</commons-cli.version>
-		<h2.version>1.4.200</h2.version><!--Java6 version -->
-		<mariadb.version>2.5.4</mariadb.version>
-		<mysql.version>8.0.19</mysql.version>
-		<postgresql.version>42.2.10</postgresql.version>
-		<oracle.version>6</oracle.version>
-		<jackson.version>2.10.3</jackson.version><!--Java6 version -->
-		<jackson-databind.version>2.10.3</jackson-databind.version><!--Java6 version -->
-		<jaxen.version>1.2.0</jaxen.version>
-		<dom4j.version>1.6.1</dom4j.version>
-		<javasysmon.version>0.3.6</javasysmon.version>
-		<gson.version>2.8.6</gson.version>
-		<resteasy.jaxrs.version>3.11.0.Final</resteasy.jaxrs.version>
-		<resteasy.client.version>4.5.2.Final</resteasy.client.version>
-		<javax.ws.rs.version>2.1.1</javax.ws.rs.version><!--Java6 version -->
-		<jetty.version>9.4.27.v20200227</jetty.version>
-		<snmp4j.version>2.6.3</snmp4j.version>
-		<libthrift.version>0.13.0</libthrift.version><!--Java6 version -->
-		<httpclient.version>4.5.12</httpclient.version>
-		<httpcore.version>4.4.13</httpcore.version>
-		<javax.servlet.version>4.0.1</javax.servlet.version><!--3.0.1 Java6 version, 
+    <vitam2.version>2.15.3</vitam2.version>
+    <netty.version>4.1.52.Final</netty.version>
+    <netty-tcnative.version>2.0.34.Final</netty-tcnative.version>
+    <waarp-shaded.version>1.0.2</waarp-shaded.version><!-- Netty HTTP and Selenuum -->
+    <netty.http.version>1.5.0</netty.http.version><!--Java6 shaded version -->
+    <slf4j.version>1.7.30</slf4j.version>
+    <logback.version>1.2.3</logback.version>
+    <guava.version>29.0-jre</guava.version><!--Java6 version -->
+    <commons.compress.version>1.20</commons.compress.version>
+    <commons.daemon.version>1.2.3</commons.daemon.version>
+    <commons.io.version>2.8.0</commons.io.version>
+    <commons.dbcp.version>1.4</commons.dbcp.version>
+    <commons.pool.version>2.8.1</commons.pool.version>
+    <commons-exec.version>1.3</commons-exec.version>
+    <commons-logging.version>1.2</commons-logging.version>
+    <commons-net.version>3.7</commons-net.version>
+    <commons-codec.version>1.15</commons-codec.version>
+    <commons-beanutils.version>1.9.4</commons-beanutils.version>
+    <commons-cli.version>1.4</commons-cli.version>
+    <h2.version>1.4.200</h2.version><!--Java6 version -->
+    <mariadb.version>2.6.2</mariadb.version>
+    <mysql.version>8.0.21</mysql.version>
+    <postgresql.version>42.2.16.jre7</postgresql.version>
+    <oracle.version>6</oracle.version>
+    <jackson.version>2.11.2</jackson.version><!--Java6 version -->
+    <jackson-databind.version>2.11.2</jackson-databind.version><!--Java6
+		version -->
+    <jaxen.version>1.2.0</jaxen.version>
+    <dom4j.version>2.1.3</dom4j.version>
+    <xerces.version>2.12.1</xerces.version>
+    <javasysmon.version>0.3.6</javasysmon.version>
+    <gson.version>2.8.6</gson.version>
+    <resteasy.client.version>4.4.2.Final</resteasy.client.version>
+    <javax.ws.rs.version>2.1.1</javax.ws.rs.version><!--Java6 version -->
+    <jetty.version>9.4.27.v20200227</jetty.version>
+    <snmp4j.version>2.6.3</snmp4j.version>
+    <libthrift.version>0.13.0</libthrift.version><!--Java6 version -->
+    <httpclient.version>4.5.12</httpclient.version>
+    <httpcore.version>4.4.13</httpcore.version>
+    <javax.servlet.version>4.0.1</javax.servlet.version><!--3.0.1 Java6 version,
 			3.1.0 Java7 -->
-		<ftp4j.version>1.7.2</ftp4j.version>
-		<joda-time.version>2.10.5</joda-time.version>
-		<jersey-common.version>2.30.1</jersey-common.version>
-		<jna.version>5.5.0</jna.version>
-		<jnr-posix-version>3.0.54</jnr-posix-version>
-		<junit.version>4.13</junit.version>
-		<javaassist.version>3.26.0-GA</javaassist.version>
-		<assertj.version>3.15.0</assertj.version>
-		<easymock.version>4.2</easymock.version>
-		<rest-assured.version>3.3.0</rest-assured.version>
-		<mockito.version>2.28.2</mockito.version>
-		<findbugs.version>2.0.3</findbugs.version>
-		<test-containers.version>1.13.0</test-containers.version>
-		<apache.ant.version>1.10.7</apache.ant.version>
-		<zjsonpatch.version>0.4.9</zjsonpatch.version>
-		<log4j2.version>2.12.1</log4j2.version>
-		<selenium.version>3.141.59</selenium.version><!--Java6 shaded version -->
-		<assertj-swing.version>3.9.2</assertj-swing.version>
+    <ftp4j.version>1.7.2</ftp4j.version>
+    <joda-time.version>2.10.6</joda-time.version>
+    <jersey-common.version>2.30.1</jersey-common.version>
+    <jna.version>5.5.0</jna.version>
+    <jnr-posix-version>3.1.1</jnr-posix-version>
+    <junit.version>4.13</junit.version>
+    <javaassist.version>3.26.0-GA</javaassist.version>
+    <assertj.version>3.17.2</assertj.version>
+    <easymock.version>4.2</easymock.version>
+    <rest-assured.version>3.3.0</rest-assured.version>
+    <mockito.version>3.5.13</mockito.version>
+    <findbugs.version>2.0.3</findbugs.version>
+    <test-containers.version>1.13.0</test-containers.version>
+    <apache.ant.version>1.10.8</apache.ant.version>
+    <zjsonpatch.version>0.4.11</zjsonpatch.version>
+    <log4j2.version>2.13.3</log4j2.version>
+    <selenium.version>3.141.59</selenium.version><!--Java6 shaded version -->
+    <assertj-swing.version>3.9.2</assertj-swing.version>
+    <json-patch.version>1.13</json-patch.version>
+    <batik-css.version>1.13</batik-css.version>
+    <snakeyaml.version>1.27</snakeyaml.version>
+    <validation-api.version>2.0.1.Final</validation-api.version>
+    <jsr305.version>3.0.2</jsr305.version>
+    <gson.version>2.8.6</gson.version>
+    <activation.version>1.1.1</activation.version>
+    <byte-buddy.version>1.10.16</byte-buddy.version>
+    <jboss-jaxrs-api_2.1_spec.version>2.0.1.Final</jboss-jaxrs-api_2.1_spec.version>
+    <jakarta.ws.rs-api.version>2.1.6</jakarta.ws.rs-api.version>
+    <htmlunit.version>2.43.1</htmlunit.version>
+
+    <!-- Vitam V2 vs V3 -->
+    <json-schema-validator.version>2.2.14</json-schema-validator.version>
+    <json-schema-core.version>1.2.14</json-schema-core.version>
+    <uri-template.version>0.9</uri-template.version>
+    <libphonenumber.version>8.12.10</libphonenumber.version>
+    <rhino.version>1.7.13</rhino.version>
+    <mailapi.version>1.4.3</mailapi.version>
+    <jopt-simple.version>5.0.4</jopt-simple.version>
 
     <!-- Maven plugins -->
     <maven.rpm-maven-plugin.version>2.1.5</maven.rpm-maven-plugin.version>
@@ -297,15 +319,15 @@
     <maven.failsafe.version>3.0.0-M3</maven.failsafe.version><!-- 2.17 -->
     <maven.clean.version>3.1.0</maven.clean.version>
     <maven.compiler.version>3.8.1</maven.compiler.version><!-- 3.1 -->
-    <maven.deploy.version>2.8.2</maven.deploy.version>
+    <maven.deploy.version>3.0.0-M1</maven.deploy.version>
     <maven.resources.version>3.1.0</maven.resources.version><!-- 2.6 -->
-    <maven.source.version>3.1.0</maven.source.version><!-- 2.3 -->
-    <maven.dependency.version>3.1.1</maven.dependency.version><!-- 2.8 -->
-    <maven.site.version>3.7.1</maven.site.version><!-- 3.3 -->
-    <maven.assembly.version>3.1.1</maven.assembly.version><!-- 2.4 -->
-    <maven.javadoc.version>3.1.1</maven.javadoc.version><!-- 2.8.1 -->
+    <maven.source.version>3.2.1</maven.source.version><!-- 2.3 -->
+    <maven.dependency.version>3.1.2</maven.dependency.version><!-- 2.8 -->
+    <maven.site.version>3.9.0</maven.site.version><!-- 3.3 -->
+    <maven.assembly.version>3.3.0</maven.assembly.version><!-- 2.4 -->
+    <maven.javadoc.version>3.2.0</maven.javadoc.version><!-- 2.8.1 -->
     <maven.exec.version>1.6.0</maven.exec.version>
-    <maven.dependencycheck.version>5.2.1</maven.dependencycheck.version>
+    <maven.dependencycheck.version>5.3.2</maven.dependencycheck.version>
     <maven-jxr-plugin.version>3.0.0</maven-jxr-plugin.version><!-- 2.5 3.0.0 -->
     <maven-project-info-reports-plugin.version>3.0.0
     </maven-project-info-reports-plugin.version>
@@ -313,25 +335,25 @@
     <maven-changelog-plugin.version>2.3</maven-changelog-plugin.version>
     <taglist-maven-plugin.version>2.4</taglist-maven-plugin.version>
     <findbugs-maven-plugin.version>3.0.5</findbugs-maven-plugin.version>
-    <maven-pmd-plugin.version>3.12.0</maven-pmd-plugin.version>
-    <maven-jar-plugin.version>3.1.2</maven-jar-plugin.version><!-- 2.5 -->
+    <maven-pmd-plugin.version>3.13.0</maven-pmd-plugin.version>
+    <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version><!-- 2.5 -->
     <maven-antrun-plugin.version>1.8</maven-antrun-plugin.version>
     <ant-contrib.version>1.0b3</ant-contrib.version>
-    <build-helper-maven-plugin.version>3.0.0
+    <build-helper-maven-plugin.version>3.1.0
     </build-helper-maven-plugin.version><!-- 1.9 -->
-    <license-maven-plugin.version>1.16</license-maven-plugin.version>
+    <license-maven-plugin.version>2.0.0</license-maven-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M2
     </maven-enforcer-plugin.version><!-- 1.3.1 -->
     <versions-maven-plugin.version>2.7</versions-maven-plugin.version>
-    <animal-sniffer-maven-plugin.version>1.18
-    </animal-sniffer-maven-plugin.version>
-    <ant.version>1.10.6</ant.version><!-- 1.8.2 -->
+    <animal-sniffer-maven-plugin.version>1.19</animal-sniffer-maven-plugin.version>
+    <ant.version>1.10.9</ant.version><!-- 1.8.2 -->
     <apiviz.version>1.3.4</apiviz.version>
-    <maven-shade-plugin>3.2.1</maven-shade-plugin>
+    <maven-shade-plugin>3.2.4</maven-shade-plugin>
     <buildToolsVersion>1.3</buildToolsVersion>
     <coberturaMavenPluginVersion>2.7</coberturaMavenPluginVersion>
-    <flatten-maven.version>1.1.0</flatten-maven.version>
-    <spotbugs-maven-plugin-version>3.1.12.2</spotbugs-maven-plugin-version>
+    <flatten-maven.version>1.2.2</flatten-maven.version>
+    <spotbugs-maven-plugin-version>4.0.0</spotbugs-maven-plugin-version>
+    <spotbugs.version>4.1.2</spotbugs.version><!-- do not upgrade -->
     <jdeb.vafer.version>1.8</jdeb.vafer.version>
     <maven.rpm-maven-plugin.version>2.2.0</maven.rpm-maven-plugin.version>
     <unix.name>r66</unix.name>
@@ -503,24 +525,13 @@
           <groupId>org.jacoco</groupId>
           <artifactId>jacoco-maven-plugin</artifactId>
           <version>${jacoco-maven-plugin.version}</version>
-          <configuration>
-            <append>true</append>
-            <excludes>
-              <exclude>com.gargoylesoftware.*</exclude>
-            </excludes>
-          </configuration>
           <executions>
             <execution>
-              <id>pre-unit-test</id>
+              <id>prepare-agent</id>
+              <phase>initialize</phase>
               <goals>
                 <goal>prepare-agent</goal>
               </goals>
-              <configuration>
-                <append>true</append>
-                <destFile>${sonar.jacoco.reportPaths}</destFile>
-                <output>file</output>
-                <!--<propertyName>surefire.argLine</propertyName>-->
-              </configuration>
             </execution>
             <execution>
               <id>post-unit-test</id>
@@ -534,12 +545,6 @@
               <goals>
                 <goal>prepare-agent-integration</goal>
               </goals>
-              <configuration>
-                <append>true</append>
-                <destFile>${sonar.jacoco.itReportPath}</destFile>
-                <output>file</output>
-                <!--<propertyName>failsafe.argLine</propertyName>-->
-              </configuration>
             </execution>
             <execution>
               <id>post-integration-test</id>
@@ -548,52 +553,11 @@
               </goals>
             </execution>
             <execution>
-              <id>merge-results</id>
-              <phase>verify</phase>
-              <goals>
-                <goal>merge</goal>
-              </goals>
-              <configuration>
-                <fileSets>
-                  <fileSet>
-                    <directory>${jacoco.outputDir}</directory>
-                    <includes>
-                      <include>*.exec</include>
-                    </includes>
-                    <excludes>
-                      <exclude>aggregate.exec</exclude>
-                    </excludes>
-                  </fileSet>
-                </fileSets>
-                <destFile>${jacoco.outputDir}/aggregate.exec</destFile>
-              </configuration>
-            </execution>
-            <execution>
               <id>report-aggregate</id>
-              <phase>prepare-package</phase>
               <goals>
                 <goal>report-aggregate</goal>
               </goals>
-              <configuration>
-                <dataFileIncludes>
-                  <dataFileInclude>${jacoco.outputDir}/aggregate.exec
-                  </dataFileInclude>
-                </dataFileIncludes>
-                <outputDirectory>${jacoco.outputDir}/jacoco-aggregate
-                </outputDirectory>
-              </configuration>
-            </execution>
-            <execution>
-              <id>post-merge-report</id>
               <phase>verify</phase>
-              <goals>
-                <goal>report</goal>
-              </goals>
-              <configuration>
-                <dataFile>${jacoco.outputDir}/aggregate.exec</dataFile>
-                <outputDirectory>${jacoco.outputDir}/jacoco-aggregate
-                </outputDirectory>
-              </configuration>
             </execution>
           </executions>
         </plugin>
@@ -676,6 +640,7 @@
                     <exclude>org.apache.ant</exclude>
                     <exclude>Oracle</exclude>
                     <exclude>com.oracle.jdbc</exclude>
+                    <exclude>fr.gouv.vitam</exclude>
                   </excludes>
                 </artifactSet>
               </configuration>
@@ -690,7 +655,8 @@
           <groupId>org.vafer</groupId>
           <version>${jdeb.vafer.version}</version>
           <configuration>
-            <deb>${project.build.directory}/waarp-vitam-${project.version}.deb</deb>
+            <deb>${project.build.directory}/waarp-vitam-${project.version}.deb
+            </deb>
             <snapshotExpand>true</snapshotExpand>
             <skip>false</skip>
             <controlDir>${project.build.directory}/control</controlDir>
@@ -698,7 +664,9 @@
 
               <!-- Artifacts -->
               <data>
-                <src>${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar</src>
+                <src>
+                  ${project.build.directory}/${project.build.finalName}-jar-with-dependencies.jar
+                </src>
                 <type>file</type>
                 <mapper>
                   <type>perm</type>
@@ -763,7 +731,9 @@
 
 
               <data>
-                <src>${package.dir}/conf/${unix.name}/systemd/system/waarp-vitam-dip.service</src>
+                <src>
+                  ${package.dir}/conf/${unix.name}/systemd/system/waarp-vitam-dip.service
+                </src>
                 <type>file</type>
                 <mapper>
                   <type>perm</type>
@@ -774,7 +744,9 @@
                 </mapper>
               </data>
               <data>
-                <src>${package.dir}/conf/${unix.name}/systemd/system/waarp-vitam-ingest.service</src>
+                <src>
+                  ${package.dir}/conf/${unix.name}/systemd/system/waarp-vitam-ingest.service
+                </src>
                 <type>file</type>
                 <mapper>
                   <type>perm</type>
@@ -785,7 +757,9 @@
                 </mapper>
               </data>
               <data>
-                <src>${package.dir}/conf/${unix.name}/systemd/system/waarp-vitam-r66.service</src>
+                <src>
+                  ${package.dir}/conf/${unix.name}/systemd/system/waarp-vitam-r66.service
+                </src>
                 <type>file</type>
                 <mapper>
                   <type>perm</type>
@@ -891,7 +865,8 @@
                 <directoryIncluded>false</directoryIncluded>
                 <sources>
                   <source>
-                    <location>${package.dir}/conf/${unix.name}/systemd/system</location>
+                    <location>${package.dir}/conf/${unix.name}/systemd/system
+                    </location>
                   </source>
                 </sources>
               </mapping>
@@ -950,6 +925,7 @@
           <nuspecAnalyzerEnabled>false</nuspecAnalyzerEnabled>
           <nugetconfAnalyzerEnabled>false</nugetconfAnalyzerEnabled>
           <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+          <failOnError>false</failOnError>
         </configuration>
         <executions>
           <execution>
@@ -972,6 +948,18 @@
       <plugin>
         <artifactId>maven-enforcer-plugin</artifactId>
         <version>${maven-enforcer-plugin.version}</version>
+        <dependencies>
+          <dependency>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>extra-enforcer-rules</artifactId>
+            <version>1.3</version>
+          </dependency>
+          <dependency>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>animal-sniffer-enforcer-rule</artifactId>
+            <version>${animal-sniffer-maven-plugin.version}</version>
+          </dependency>
+        </dependencies>
         <executions>
           <execution>
             <id>enforce-tools</id>
@@ -986,14 +974,14 @@
                   <version>[1.8.0,)</version>
                 </requireJavaVersion>
                 <requireMavenVersion>
-                  <version>[2.2.1,),[3.2,)</version>
+                  <version>[3.5.4,)</version>
                 </requireMavenVersion>
               </rules>
             </configuration>
           </execution>
           <execution>
             <configuration>
-              <fail>true</fail>
+              <fail>false</fail>
               <rules>
                 <dependencyConvergence/>
               </rules>
@@ -1002,6 +990,23 @@
             <goals>
               <goal>enforce</goal>
             </goals>
+          </execution>
+          <execution>
+            <id>enforce-bytecode-version</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <enforceBytecodeVersion>
+                  <maxJdkVersion>1.8</maxJdkVersion>
+                  <excludes>
+                    <exclude>fr.gouv.vitam</exclude>
+                  </excludes>
+                </enforceBytecodeVersion>
+              </rules>
+              <fail>true</fail>
+            </configuration>
           </execution>
         </executions>
       </plugin>
@@ -1016,7 +1021,7 @@
           <target>${java.version}</target>
           <testSource>1.8</testSource>
           <testTarget>1.8</testTarget>
-          <!-- <release>8</release> if used with Java 11 -->
+          <release>11</release>
           <debug>true</debug>
           <optimize>true</optimize>
           <showDeprecation>true</showDeprecation>
@@ -1034,9 +1039,10 @@
           <maxmem>2048m</maxmem>
         </configuration>
       </plugin>
+      <!-- ensure that only methods available in java 1.6 can
+           be used even when compiling with java 1.7+ -->
+      <!--              
       <plugin>
-        <!-- ensure that only methods available in java 1.6 can
-             be used even when compiling with java 1.7+ -->
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>animal-sniffer-maven-plugin</artifactId>
         <version>${animal-sniffer-maven-plugin.version}</version>
@@ -1059,7 +1065,7 @@
           </execution>
         </executions>
       </plugin>
-
+      -->
       <plugin>
         <artifactId>maven-source-plugin</artifactId>
         <version>${maven.source.version}</version>
@@ -1128,7 +1134,7 @@
           <dependency>
             <groupId>com.github.spotbugs</groupId>
             <artifactId>spotbugs</artifactId>
-            <version>4.0.0-beta3</version>
+            <version>${spotbugs.version}</version>
           </dependency>
           <dependency>
             <groupId>org.beiter.michael.util</groupId>
@@ -1203,7 +1209,8 @@
               <goal>copy-resources</goal>
             </goals>
             <configuration>
-              <outputDirectory>${project.build.directory}/control</outputDirectory>
+              <outputDirectory>${project.build.directory}/control
+              </outputDirectory>
               <overwrite>true</overwrite>
               <resources>
                 <resource>
@@ -1260,7 +1267,8 @@
                               username="${unix.user}" group="${unix.group}"
                               fullpath="/waarp/lib/${unix.name}/${project.build.finalName}-jar-with-dependencies.jar"
                               preserveLeadingSlashes="true">
-                    <include name="${project.build.finalName}-jar-with-dependencies.jar"/>
+                    <include
+                      name="${project.build.finalName}-jar-with-dependencies.jar"/>
                   </tarfileset>
                   <tarfileset dir="${package.dir}/conf/${unix.name}"
                               filemode="644"
@@ -1298,11 +1306,12 @@
                               prefix="/waarp/tmp/${unix.name}"
                               preserveLeadingSlashes="true">
                   </tarfileset>
-                  <tarfileset dir="${package.dir}/conf/${unix.name}/systemd/system"
-                              filemode="640"
-                              username="root" group="root"
-                              prefix="/lib/systemd/system"
-                              preserveLeadingSlashes="true">
+                  <tarfileset
+                    dir="${package.dir}/conf/${unix.name}/systemd/system"
+                    filemode="640"
+                    username="root" group="root"
+                    prefix="/lib/systemd/system"
+                    preserveLeadingSlashes="true">
                     <include name="*.service"/>
                   </tarfileset>
                 </tar>
@@ -1336,7 +1345,7 @@
             <inherited>true</inherited>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-deploy-plugin</artifactId>
-            <version>3.0.0-M1</version><!-- 2.8.1 -->
+            <version>${maven.deploy.version}</version><!-- 2.8.1 -->
             <configuration>
               <updateReleaseInfo>true</updateReleaseInfo>
             </configuration>
@@ -1354,6 +1363,7 @@
         <artifactId>dependency-check-maven</artifactId>
         <version>${maven.dependencycheck.version}</version>
         <configuration>
+          <failOnError>false</failOnError>
           <skipProvidedScope>true</skipProvidedScope>
           <skipRuntimeScope>true</skipRuntimeScope>
           <skipTestScope>true</skipTestScope>
@@ -1401,6 +1411,7 @@
         <configuration>
           <skipEmptyReport>true</skipEmptyReport>
           <dependencyDetailsEnabled>true</dependencyDetailsEnabled>
+          <dependencyLocationsEnabled>false</dependencyLocationsEnabled>
           <!-- <skip>${module.project}</skip> -->
         </configuration>
         <reportSets>
@@ -1548,12 +1559,6 @@
           <reportSet>
             <configuration>
               <attach>false</attach>
-              <doclet>org.jboss.apiviz.APIviz</doclet>
-              <docletArtifact>
-                <groupId>com.grahamedgecombe.apiviz</groupId>
-                <artifactId>apiviz</artifactId>
-                <version>${apiviz.version}</version>
-              </docletArtifact>
               <useStandardDocletOptions>true</useStandardDocletOptions>
               <charset>UTF-8</charset>
               <docencoding>UTF-8</docencoding>
@@ -1566,14 +1571,13 @@
               </doctitle>
               <windowtitle>${project.name} ${project.version}
               </windowtitle>
-              <javaApiLinks>
-                <property>
-                  <name>api_1.6</name>
-                  <value>http://docs.oracle.com/javaee/6/api/</value>
-                </property>
-              </javaApiLinks>
+              <detectJavaApiLink>false</detectJavaApiLink>
+              <source>1.8</source>
               <links>
-                <link>http://docs.oracle.com/javaee/6/api/</link>
+                <link>http://docs.oracle.com/javase/8/docs/api/</link>
+              </links>
+              <links>
+                <link>http://docs.oracle.com/javase/8/docs/api</link>
                 <link>http://www.slf4j.org/apidocs/</link>
               </links>
               <encoding>UTF-8</encoding>
@@ -1626,13 +1630,13 @@
 
   <dependencyManagement>
     <dependencies>
-	    <dependency>
-				<groupId>Waarp</groupId>
-				<artifactId>Waarp-All-Jdk8</artifactId>
-				<version>${waarp.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-		</dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>Waarp-All</artifactId>
+        <version>${waarp.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
       <!-- ######################## Netty dependencies ######################## -->
       <dependency>
         <groupId>io.netty</groupId>
@@ -1659,6 +1663,10 @@
           <exclusion>
             <artifactId>xml-apis</artifactId>
             <groupId>xml-apis</groupId>
+          </exclusion>
+          <exclusion>
+            <groupId>commons-pool</groupId>
+            <artifactId>commons-pool</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1691,52 +1699,106 @@
             <groupId>org.apache.thrift</groupId>
             <artifactId>libthrift</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.javassist</groupId>
+            <artifactId>javassist</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpExec</artifactId>
+        <version>${waarp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpFtpClient</artifactId>
+        <version>${waarp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpGatewayKernel</artifactId>
+        <version>${waarp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpHttp</artifactId>
+        <version>${waarp.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpIcap</artifactId>
+        <version>${waarp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpPassword</artifactId>
+        <version>${waarp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpSnmp</artifactId>
+        <version>${waarp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>Waarp</groupId>
+        <artifactId>WaarpThrift</artifactId>
+        <version>${waarp.version}</version>
+      </dependency>
 
-			<!-- ############################# DATABASE OPTIONAL ############################## -->
-			<dependency>
-				<groupId>com.h2database</groupId>
-				<artifactId>h2</artifactId>
-				<version>${h2.version}</version>
-				<optional>true</optional>
-			</dependency>
-			<dependency>
-				<groupId>org.mariadb.jdbc</groupId>
-				<artifactId>mariadb-java-client</artifactId>
-				<version>${mariadb.version}</version>
-				<exclusions>
-					<exclusion>
-						<artifactId>jna</artifactId>
-						<groupId>net.java.dev.jna</groupId>
-					</exclusion>
-				</exclusions>
-				<optional>true</optional>
-			</dependency>
-			<dependency>
-				<groupId>mysql</groupId>
-				<artifactId>mysql-connector-java</artifactId>
-				<version>${mysql.version}</version>
-				<optional>true</optional>
-			</dependency>
-			<dependency>
-				<groupId>org.postgresql</groupId>
-				<artifactId>postgresql</artifactId>
-				<version>${postgresql.version}</version>
-				<optional>true</optional>
-			</dependency>
+      <!-- ############################# DATABASE OPTIONAL ############################## -->
+      <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <version>${h2.version}</version>
+        <optional>true</optional>
+      </dependency>
+      <dependency>
+        <groupId>org.mariadb.jdbc</groupId>
+        <artifactId>mariadb-java-client</artifactId>
+        <version>${mariadb.version}</version>
+        <exclusions>
+          <exclusion>
+            <artifactId>jna</artifactId>
+            <groupId>net.java.dev.jna</groupId>
+          </exclusion>
+        </exclusions>
+        <optional>true</optional>
+      </dependency>
+      <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <version>${mysql.version}</version>
+        <optional>true</optional>
+      </dependency>
+      <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>postgresql</artifactId>
+        <version>${postgresql.version}</version>
+        <optional>true</optional>
+      </dependency>
 
-			<!-- ############################### JDBC dependencies ########################## -->
-			<dependency>
-				<groupId>commons-dbcp</groupId>
-				<artifactId>commons-dbcp</artifactId>
-				<version>${commons.dbcp.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.commons</groupId>
-				<artifactId>commons-pool2</artifactId>
-				<version>${commons.pool.version}</version>
-			</dependency>
+      <!-- ############################### JDBC dependencies ########################## -->
+      <dependency>
+        <groupId>commons-dbcp</groupId>
+        <artifactId>commons-dbcp</artifactId>
+        <version>${commons.dbcp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-pool2</artifactId>
+        <version>${commons.pool.version}</version>
+      </dependency>
 
       <!-- ####################### Vitam Dependencies #################### -->
       <dependency>
@@ -1760,6 +1822,62 @@
           </exclusion>
         </exclusions>
         <version>${vitam.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>fr.gouv.vitam</groupId>
+        <artifactId>common-public</artifactId>
+        <version>${vitam.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-jackson2-provider</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-client</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>fr.gouv.vitam</groupId>
+        <artifactId>common-database-public</artifactId>
+        <version>${vitam.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>fr.gouv.vitam</groupId>
+        <artifactId>common-public-client</artifactId>
+        <version>${vitam.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-client</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>fr.gouv.vitam</groupId>
+        <artifactId>ingest-external-api</artifactId>
+        <version>${vitam.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <!-- ########## Vitam for Test ****************** -->
       <dependency>
@@ -1789,6 +1907,10 @@
           <exclusion>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-compress</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
           </exclusion>
         </exclusions>
         <version>${vitam.version}</version>
@@ -1836,6 +1958,18 @@
             <groupId>org.elasticsearch</groupId>
             <artifactId>metrics-elasticsearch-reporter</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>commons-beanutils</groupId>
+            <artifactId>commons-beanutils</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.github.fge</groupId>
+            <artifactId>json-schema-validator</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1868,115 +2002,115 @@
         <version>1.4.01</version>
         <scope>test</scope>
       </dependency>
-			<!-- ################ Jackson #################### -->
-			<dependency>
-				<groupId>com.fasterxml.jackson.core</groupId>
-				<artifactId>jackson-annotations</artifactId>
-				<version>${jackson.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.jackson.core</groupId>
-				<artifactId>jackson-core</artifactId>
-				<version>${jackson.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.jackson.core</groupId>
-				<artifactId>jackson-databind</artifactId>
-				<version>${jackson-databind.version}</version>
-			</dependency>
+      <!-- ################ Jackson #################### -->
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-annotations</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-core</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>${jackson-databind.version}</version>
+      </dependency>
 
-			<dependency>
-				<groupId>com.fasterxml.jackson.dataformat</groupId>
-				<artifactId>jackson-dataformat-smile</artifactId>
-				<version>${jackson.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.jackson.jaxrs</groupId>
-				<artifactId>jackson-jaxrs-json-provider</artifactId>
-				<version>${jackson.version}</version>
-			</dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-smile</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.jaxrs</groupId>
+        <artifactId>jackson-jaxrs-json-provider</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
 
-			<dependency>
-				<groupId>com.fasterxml.jackson.jaxrs</groupId>
-				<artifactId>jackson-jaxrs-smile-provider</artifactId>
-				<version>${jackson.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.dataformat</groupId>
-						<artifactId>jackson-dataformat-smile</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.jackson.jaxrs</groupId>
-				<artifactId>jackson-jaxrs-base</artifactId>
-				<version>${jackson.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-core</artifactId>
-					</exclusion>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-databind</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.jaxrs</groupId>
+        <artifactId>jackson-jaxrs-smile-provider</artifactId>
+        <version>${jackson.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-smile</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.jaxrs</groupId>
+        <artifactId>jackson-jaxrs-base</artifactId>
+        <version>${jackson.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
 
-			<dependency>
-				<groupId>com.fasterxml.jackson.module</groupId>
-				<artifactId>jackson-module-jaxb-annotations</artifactId>
-				<version>${jackson.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-annotations</artifactId>
-					</exclusion>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-core</artifactId>
-					</exclusion>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-databind</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.jackson.datatype</groupId>
-				<artifactId>jackson-datatype-jsr310</artifactId>
-				<version>${jackson.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-annotations</artifactId>
-					</exclusion>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-core</artifactId>
-					</exclusion>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-databind</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.jackson.dataformat</groupId>
-				<artifactId>jackson-dataformat-yaml</artifactId>
-				<version>${jackson.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-core</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.jackson.module</groupId>
-				<artifactId>jackson-module-afterburner</artifactId>
-				<version>${jackson.version}</version>
-			</dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.module</groupId>
+        <artifactId>jackson-module-jaxb-annotations</artifactId>
+        <version>${jackson.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.datatype</groupId>
+        <artifactId>jackson-datatype-jsr310</artifactId>
+        <version>${jackson.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.dataformat</groupId>
+        <artifactId>jackson-dataformat-yaml</artifactId>
+        <version>${jackson.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.module</groupId>
+        <artifactId>jackson-module-afterburner</artifactId>
+        <version>${jackson.version}</version>
+      </dependency>
       <dependency>
         <groupId>com.github.fge</groupId>
         <artifactId>jackson-coreutils</artifactId>
@@ -1985,198 +2119,214 @@
       <dependency>
         <groupId>com.github.fge</groupId>
         <artifactId>json-patch</artifactId>
-        <version>1.9</version>
+        <version>${json-patch.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.xmlgraphics</groupId>
         <artifactId>batik-css</artifactId>
-        <version>1.8</version>
+        <version>${batik-css.version}</version>
       </dependency>
       <dependency>
         <groupId>org.yaml</groupId>
         <artifactId>snakeyaml</artifactId>
-        <version>1.23</version>
+        <version>${snakeyaml.version}</version>
       </dependency>
       <dependency>
         <groupId>javax.validation</groupId>
         <artifactId>validation-api</artifactId>
-        <version>2.0.1.Final</version>
+        <version>${validation-api.version}</version>
       </dependency>
-			<dependency>
-				<groupId>org.apache.httpcomponents</groupId>
-				<artifactId>httpclient</artifactId>
-				<version>${httpclient.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.httpcomponents</groupId>
-				<artifactId>httpcore</artifactId>
-				<version>${httpcore.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>joda-time</groupId>
-				<artifactId>joda-time</artifactId>
-				<version>${joda-time.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.google.code.findbugs</groupId>
-				<artifactId>jsr305</artifactId>
-				<version>3.0.0</version>
-			</dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpclient</artifactId>
+        <version>${httpclient.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpcore</artifactId>
+        <version>${httpcore.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>joda-time</groupId>
+        <artifactId>joda-time</artifactId>
+        <version>${joda-time.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.google.code.findbugs</groupId>
+        <artifactId>jsr305</artifactId>
+        <version>${jsr305.version}</version>
+      </dependency>
       <dependency>
         <groupId>com.google.code.gson</groupId>
         <artifactId>gson</artifactId>
-        <version>2.5</version>
+        <version>${gson.version}</version>
       </dependency>
       <dependency>
         <groupId>javax.activation</groupId>
         <artifactId>activation</artifactId>
-        <version>1.1.1</version>
+        <version>${activation.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.dom4j</groupId>
+        <artifactId>dom4j</artifactId>
+        <version>${dom4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>jaxen</groupId>
+        <artifactId>jaxen</artifactId>
+        <version>${jaxen.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.exist-db.thirdparty.xerces</groupId>
+        <artifactId>xercesImpl</artifactId>
+        <version>${xerces.version}</version>
       </dependency>
 
-			<!-- ########################## Apache Commons ######################### -->
-			<dependency>
-				<groupId>commons-daemon</groupId>
-				<artifactId>commons-daemon</artifactId>
-				<version>${commons.daemon.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.commons</groupId>
-				<artifactId>commons-exec</artifactId>
-				<version>${commons-exec.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>commons-net</groupId>
-				<artifactId>commons-net</artifactId>
-				<version>${commons-net.version}</version>
-				<classifier>ftp</classifier>
-			</dependency>
-			<dependency>
-				<groupId>commons-cli</groupId>
-				<artifactId>commons-cli</artifactId>
-				<version>${commons-cli.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.commons</groupId>
-				<artifactId>commons-compress</artifactId>
-				<version>${commons.compress.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>commons-io</groupId>
-				<artifactId>commons-io</artifactId>
-				<version>${commons.io.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>commons-codec</groupId>
-				<artifactId>commons-codec</artifactId>
-				<version>${commons-codec.version}</version>
-			</dependency>
+      <!-- ########################## Apache Commons ######################### -->
+      <dependency>
+        <groupId>commons-daemon</groupId>
+        <artifactId>commons-daemon</artifactId>
+        <version>${commons.daemon.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-exec</artifactId>
+        <version>${commons-exec.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>commons-net</groupId>
+        <artifactId>commons-net</artifactId>
+        <version>${commons-net.version}</version>
+        <classifier>ftp</classifier>
+      </dependency>
+      <dependency>
+        <groupId>commons-cli</groupId>
+        <artifactId>commons-cli</artifactId>
+        <version>${commons-cli.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-compress</artifactId>
+        <version>${commons.compress.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>commons-io</groupId>
+        <artifactId>commons-io</artifactId>
+        <version>${commons.io.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>commons-codec</groupId>
+        <artifactId>commons-codec</artifactId>
+        <version>${commons-codec.version}</version>
+      </dependency>
 
-			<dependency>
-				<groupId>com.google.guava</groupId>
-				<artifactId>guava</artifactId>
-				<version>${guava.version}</version>
-			</dependency>
-			<!-- ########################## Logger ########################## -->
+      <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>${guava.version}</version>
+      </dependency>
 
-			<dependency>
-				<groupId>ch.qos.logback</groupId>
-				<artifactId>logback-core</artifactId>
-				<version>${logback.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>ch.qos.logback</groupId>
-				<artifactId>logback-classic</artifactId>
-				<version>${logback.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>org.slf4j</groupId>
-						<artifactId>slf4j-api</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>ch.qos.logback</groupId>
-				<artifactId>logback-access</artifactId>
-				<version>${logback.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.slf4j</groupId>
-				<artifactId>slf4j-api</artifactId>
-				<version>${slf4j.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.slf4j</groupId>
-				<artifactId>log4j-over-slf4j</artifactId>
-				<version>${slf4j.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>org.slf4j</groupId>
-						<artifactId>slf4j-api</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>org.slf4j</groupId>
-				<artifactId>jcl-over-slf4j</artifactId>
-				<version>${slf4j.version}</version>
-				<!--<scope>provided</scope> -->
-				<exclusions>
-					<exclusion>
-						<groupId>org.slf4j</groupId>
-						<artifactId>slf4j-api</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>org.slf4j</groupId>
-				<artifactId>jul-to-slf4j</artifactId>
-				<version>${slf4j.version}</version>
-				<!--<scope>provided</scope> -->
-				<exclusions>
-					<exclusion>
-						<groupId>org.slf4j</groupId>
-						<artifactId>slf4j-api</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
+      <!-- ########################## Logger ########################## -->
 
-			<!-- ####################### Extra Logger ####################### -->
-			<dependency>
-				<groupId>com.flipkart.zjsonpatch</groupId>
-				<artifactId>zjsonpatch</artifactId>
-				<version>${zjsonpatch.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-core</artifactId>
-					</exclusion>
-					<exclusion>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-databind</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.logging.log4j</groupId>
-				<artifactId>log4j-api</artifactId>
-				<version>${log4j2.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.logging.log4j</groupId>
-				<artifactId>log4j-to-slf4j</artifactId>
-				<version>${log4j2.version}</version>
-				<exclusions>
-					<exclusion>
-						<groupId>org.slf4j</groupId>
-						<artifactId>slf4j-api</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>commons-logging</groupId>
-				<artifactId>commons-logging</artifactId>
-				<version>${commons-logging.version}</version>
-			</dependency>
+      <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-core</artifactId>
+        <version>${logback.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-classic</artifactId>
+        <version>${logback.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>ch.qos.logback</groupId>
+        <artifactId>logback-access</artifactId>
+        <version>${logback.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>${slf4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>log4j-over-slf4j</artifactId>
+        <version>${slf4j.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>jcl-over-slf4j</artifactId>
+        <version>${slf4j.version}</version>
+        <!--<scope>provided</scope> -->
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>jul-to-slf4j</artifactId>
+        <version>${slf4j.version}</version>
+        <!--<scope>provided</scope> -->
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+
+      <!-- ####################### Extra Logger ####################### -->
+      <dependency>
+        <groupId>com.flipkart.zjsonpatch</groupId>
+        <artifactId>zjsonpatch</artifactId>
+        <version>${zjsonpatch.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-api</artifactId>
+        <version>${log4j2.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-to-slf4j</artifactId>
+        <version>${log4j2.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>commons-logging</groupId>
+        <artifactId>commons-logging</artifactId>
+        <version>${commons-logging.version}</version>
+      </dependency>
 
 
       <!-- ####################### Tests ####################### -->
@@ -2208,7 +2358,7 @@
         <!-- ensure good version between mockito and selenium -->
         <groupId>net.bytebuddy</groupId>
         <artifactId>byte-buddy</artifactId>
-        <version>1.9.10</version>
+        <version>${byte-buddy.version}</version>
         <scope>test</scope>
       </dependency>
       <dependency>
@@ -2237,10 +2387,28 @@
         <scope>test</scope>
       </dependency>
       <dependency>
-      	<groupId>org.apache.httpcomponents</groupId>
-      	<artifactId>httpcore-nio</artifactId>
-      	<version>4.4.12</version>
-      	<scope>test</scope>
+        <groupId>com.github.detro</groupId>
+        <artifactId>ghostdriver</artifactId>
+        <version>2.1.0</version>
+        <scope>test</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-remote-driver</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.seleniumhq.selenium</groupId>
+        <artifactId>htmlunit-driver</artifactId>
+        <version>${htmlunit.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpcore-nio</artifactId>
+        <version>${httpcore.version}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -2249,16 +2417,38 @@
     <dependency>
       <groupId>fr.gouv.vitam</groupId>
       <artifactId>ingest-external-client</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-lang3</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>fr.gouv.vitam</groupId>
       <artifactId>access-external-client</artifactId>
       <exclusions>
-      	<exclusion>
-      		<groupId>org.slf4j</groupId>
-      		<artifactId>slf4j-api</artifactId>
-      	</exclusion>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>fr.gouv.vitam</groupId>
+      <artifactId>common-public</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>fr.gouv.vitam</groupId>
+      <artifactId>common-database-public</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>fr.gouv.vitam</groupId>
+      <artifactId>common-public-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>fr.gouv.vitam</groupId>
+      <artifactId>ingest-external-api</artifactId>
     </dependency>
     <dependency>
       <groupId>commons-cli</groupId>
@@ -2268,16 +2458,111 @@
       <groupId>Waarp</groupId>
       <artifactId>WaarpR66</artifactId>
       <exclusions>
-      	<exclusion>
-      		<groupId>org.slf4j</groupId>
-      		<artifactId>slf4j-api</artifactId>
-      	</exclusion>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpCommon</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpDigest</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpExec</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpFtpClient</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpGatewayKernel</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpHttp</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpIcap</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpPassword</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpSnmp</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>Waarp</groupId>
+      <artifactId>WaarpThrift</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-all</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-exec</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
+    <!-- RestEasy -->
+    <dependency>
+      <groupId>org.jboss.resteasy</groupId>
+      <artifactId>resteasy-client</artifactId>
+      <version>${resteasy.client.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.resteasy</groupId>
+      <artifactId>resteasy-jackson2-provider</artifactId>
+      <version>${resteasy.client.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>javax.ws.rs</groupId>
+      <artifactId>javax.ws.rs-api</artifactId>
+      <version>${javax.ws.rs.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-beanutils</groupId>
+      <artifactId>commons-beanutils</artifactId>
+      <version>${commons-beanutils.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.spec.javax.ws.rs</groupId>
+      <artifactId>jboss-jaxrs-api_2.1_spec</artifactId>
+      <version>${jboss-jaxrs-api_2.1_spec.version}</version>
+    </dependency>
+
     <!-- test -->
     <dependency>
       <groupId>junit</groupId>
@@ -2305,14 +2590,14 @@
       <artifactId>ingest-external-rest</artifactId>
       <scope>test</scope>
       <exclusions>
-      	<exclusion>
-      		<groupId>com.google.errorprone</groupId>
-      		<artifactId>error_prone_annotations</artifactId>
-      	</exclusion>
-      	<exclusion>
-      		<groupId>org.slf4j</groupId>
-      		<artifactId>slf4j-api</artifactId>
-      	</exclusion>
+        <exclusion>
+          <groupId>com.google.errorprone</groupId>
+          <artifactId>error_prone_annotations</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -2330,10 +2615,10 @@
       <artifactId>common-private</artifactId>
       <scope>test</scope>
       <exclusions>
-      	<exclusion>
-      		<groupId>org.slf4j</groupId>
-      		<artifactId>slf4j-api</artifactId>
-      	</exclusion>
+        <exclusion>
+          <groupId>io.dropwizard.metrics</groupId>
+          <artifactId>metrics-core</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -2354,16 +2639,64 @@
       <version>${waarp.version}</version>
       <scope>test</scope>
       <exclusions>
-      	<exclusion>
-      		<groupId>org.slf4j</groupId>
-      		<artifactId>slf4j-api</artifactId>
-      	</exclusion>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
-	<dependency>
-		<groupId>org.slf4j</groupId>
-		<artifactId>slf4j-api</artifactId>
-	</dependency>
+    <!-- Dependencies for Vitam V2 for simplicity of V2 vs V3 JAR -->
+    <dependency>
+      <groupId>com.github.fge</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <version>${json-schema-validator.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.googlecode.libphonenumber</groupId>
+          <artifactId>libphonenumber</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.mozilla</groupId>
+          <artifactId>rhino</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.github.fge</groupId>
+      <artifactId>json-schema-core</artifactId>
+      <version>${json-schema-core.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.mozilla</groupId>
+          <artifactId>rhino</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.github.fge</groupId>
+      <artifactId>uri-template</artifactId>
+      <version>${uri-template.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.googlecode.libphonenumber</groupId>
+      <artifactId>libphonenumber</artifactId>
+      <version>${libphonenumber.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.mozilla</groupId>
+      <artifactId>rhino</artifactId>
+      <version>${rhino.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>javax.mail</groupId>
+      <artifactId>mailapi</artifactId>
+      <version>${mailapi.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.sf.jopt-simple</groupId>
+      <artifactId>jopt-simple</artifactId>
+      <version>${jopt-simple.version}</version>
+    </dependency>
   </dependencies>
 
 </project>

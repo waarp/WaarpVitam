@@ -40,8 +40,8 @@
     <links>
       <item name="Waarp" href="http://www.waarp.fr/"/>
     </links>
-    <menu name="Waarp All">
-      <item name="Overview of Waarp All Server" href="index.html"/>
+    <menu name="Waarp Vitam">
+      <item name="Overview of Waarp Vitam Server" href="index.html"/>
     </menu>
     <menu ref="reports"/>
   </body>
