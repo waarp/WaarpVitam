@@ -276,7 +276,10 @@ public class DipManager implements Runnable {
       logger.error(ISSUE_SINCE_SELECT_PRODUCES_AN_ERROR, e);
       // Should retry select from the beginning
       try {
-        dipRequest.setStep(DIPStep.RETRY_SELECT, 0, dipRequestFactory);
+        // FIXME this does not take into account various cases since Vitam masks the real reason
+        dipRequest.setStep(DIPStep.ERROR, 500, dipRequestFactory);
+        // Will inform back of error which could not be fixed when reloaded
+        // Ignore: dipRequest.setStep(DIPStep.RETRY_SELECT, 0, dipRequestFactory);
       } catch (InvalidParseOperationException ex) {
         // very bad
         logger.error("FATAL: Very bad since cannot save DipRequest", ex);

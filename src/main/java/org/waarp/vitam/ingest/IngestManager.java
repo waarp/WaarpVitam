@@ -540,6 +540,8 @@ public class IngestManager implements Runnable {
       }
     } catch (VitamClientException e) {
       logger.warn("Issue since ingest client produces an error", e);
+      // FIXME this does not take into account various cases since Vitam masks the real reason
+      ingestRequest.setStep(IngestStep.ERROR, 500, ingestRequestFactory);
     } finally {
       // Shall read all InputStream
       StreamUtils.consumeAnyEntityAndClose(response);

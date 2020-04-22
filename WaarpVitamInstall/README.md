@@ -56,11 +56,34 @@ files into it.
 Once copied in the correct directory, go to the base directory (for instance:
 `/waarp`) where you placed all subdirs and where this `README.md` is.
 
-Run `./scripts/r66/install-module.sh path_to_Waarp-Vitam.jar` 
+Run `./scripts/r66/install-module.sh path_to_Waarp-Vitam.jar path_to_Vitam_jars` 
 which will rewrite all files replacing `%ROOT%` by the
 current directory and copy the `Waarp-Vitam-X.Y.Z-jar-with-dependencies.jar` 
 into `%ROOT%/lib/r66/` directory
-(`mvn clean install` to generate this jar into target directory).
+(`mvn clean install` to generate this jar into target directory) and add to the 
+`-cp` argument the Vitam jar path.
+
+This Vitam jar path allows to use different versions of Vitam with Waarp-Vitam, 
+both 2.9 to 3.X versions.
+
+It relies also on existing Jars from Vitam:
+
+### B. Vitam jars
+    
+  * fr.gouv.vitam:ingest-external-client
+  * fr.gouv.vitam:common-public-client
+  * fr.gouv.vitam:ingest-external-api
+  * fr.gouv.vitam:access-external-client
+  * fr.gouv.vitam:common-public
+  * fr.gouv.vitam:common-http-interface
+  * fr.gouv.vitam:access-external-api
+  * fr.gouv.vitam:common-database-public
+    
+#### Specific to V2 version of Vitam
+
+  * fr.gouv.vitam:access-external-common:jar:2.15.3
+  * fr.gouv.vitam:logbook-common-client:jar:2.15.3
+  * fr.gouv.vitam:logbook-common:jar:2.15.3
 
 ## IV. Adapt according to your need
 

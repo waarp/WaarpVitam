@@ -8,6 +8,28 @@ Dependency
   It is based mainly on the NETTY framework (NIO great framework support at {{http://netty.io}}
   and is tend to be really efficient, both in term of memory, threads and network bandwidth.
 
+  It relies also on existing Jars from Vitam:
+
+  Common Jar for both V2 and V3 versions of Vitam
+
+    Vitam jars:
+
+     * fr.gouv.vitam:ingest-external-client
+     * fr.gouv.vitam:common-public-client
+     * fr.gouv.vitam:ingest-external-api
+     * fr.gouv.vitam:access-external-client
+     * fr.gouv.vitam:common-public
+     * fr.gouv.vitam:common-http-interface
+     * fr.gouv.vitam:access-external-api
+     * fr.gouv.vitam:common-database-public
+
+    Specific to V2 version of Vitam:
+
+     * fr.gouv.vitam:access-external-common:jar:2.15.3
+     * fr.gouv.vitam:logbook-common-client:jar:2.15.3
+     * fr.gouv.vitam:logbook-common:jar:2.15.3
+
+  See the README.md in WaarpVitamInstall directory to learn how to install this software.
 
 [images/waarp.jpg] Waarp Main Project Logo
 
