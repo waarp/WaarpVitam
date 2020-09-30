@@ -1,0 +1,679 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IngestManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.ingest</a> &gt; <span class="el_source">IngestManager.java</span></div><h1>IngestManager.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.ingest;
+
+import fr.gouv.vitam.access.external.client.AdminExternalClient;
+import fr.gouv.vitam.common.GlobalDataRest;
+import fr.gouv.vitam.common.LocalDateUtil;
+import fr.gouv.vitam.common.PropertiesUtils;
+import fr.gouv.vitam.common.client.VitamContext;
+import fr.gouv.vitam.common.exception.InvalidParseOperationException;
+import fr.gouv.vitam.common.exception.VitamClientException;
+import fr.gouv.vitam.common.external.client.IngestCollection;
+import fr.gouv.vitam.common.i18n.VitamLogbookMessages;
+import fr.gouv.vitam.common.model.LocalFile;
+import fr.gouv.vitam.common.model.RequestResponse;
+import fr.gouv.vitam.common.model.RequestResponseOK;
+import fr.gouv.vitam.common.model.StatusCode;
+import fr.gouv.vitam.common.stream.StreamUtils;
+import fr.gouv.vitam.ingest.external.api.exception.IngestExternalException;
+import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
+import org.apache.commons.io.FileUtils;
+import org.waarp.common.logging.SysErrLogger;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.WaarpThreadFactory;
+import org.waarp.vitam.common.OperationCheck;
+
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static java.nio.file.StandardCopyOption.*;
+import static org.waarp.vitam.ingest.IngestRequest.*;
+
+/**
+ * IngestManager is the central logic for Ingest management between Waarp and
+ * Vitam
+ */
+public class IngestManager implements Runnable {
+  /**
+   * Prefix of File Information for ATR_FAILED
+   */
+  public static final String ATR_FAILED = &quot;ATR_FAILED&quot;;
+  /**
+   * Prefix of File Information for ATR
+   */
+  public static final String ATR = &quot;ATR&quot;;
+  /**
+   * Prefix of File Information for INGEST_ID
+   */
+  public static final String INGEST_ID = &quot;INGEST_ID&quot;;
+  protected static final String ERROR_MESSAGE = &quot;{}\n\t{}&quot;;
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L86">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L87">      WaarpLoggerFactory.getLogger(IngestManager.class);</span>
+  private static final String INGEST_INT_UPLOAD = &quot;STP_UPLOAD_SIP&quot;;
+  private static final String ATR_KO_DEFAULT_XML = &quot;ATR_KO_DEFAULT.xml&quot;;
+  private static final String DATE = &quot;#MADATE#&quot;;
+  private static final String MESSAGE_IDENTIFIER = &quot;#MESSAGE_IDENTIFIER#&quot;;
+  private static final String ARCHIVAL_AGENCY = &quot;#ARCHIVAL_AGENCY#&quot;;
+  private static final String TRANSFERRING_AGENCY = &quot;#TRANSFERRING_AGENCY#&quot;;
+  private static final String COMMENT = &quot;#COMMENT#&quot;;
+  private static final String EVENT_TYPE = &quot;#EVENT_TYPE#&quot;;
+  private static final String EVENT_TYPE_CODE = &quot;#EVENT_TYPE_CODE#&quot;;
+  private static final String EVENT_DATE_TIME = &quot;#EVENT_DATE_TIME#&quot;;
+  private static final String OUTCOME = &quot;#OUTCOME#&quot;;
+  private static final String OUTCOME_DETAIL = &quot;#OUTCOME_DETAIL#&quot;;
+  private static final String OUTCOME_DETAIL_MESSAGE =
+      &quot;#OUTCOME_DETAIL_MESSAGE#&quot;;
+  private static final String ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR =
+      &quot;Issue since ingest packet produces an error&quot;;
+
+  private IngestRequest ingestRequest;
+  private AdminExternalClient adminExternalClient;
+  private IngestExternalClient client;
+  private IngestRequestFactory ingestRequestFactory;
+
+<span class="fc" id="L110">  IngestManager() {</span>
+    // Empty
+<span class="fc" id="L112">  }</span>
+
+  private IngestManager(final IngestRequest ingestRequest,
+                        final AdminExternalClient adminExternalClient,
+                        final IngestExternalClient client,
+<span class="fc" id="L117">                        final IngestRequestFactory ingestRequestFactory) {</span>
+<span class="fc" id="L118">    this.ingestRequest = ingestRequest;</span>
+<span class="fc" id="L119">    this.adminExternalClient = adminExternalClient;</span>
+<span class="fc" id="L120">    this.client = client;</span>
+<span class="fc" id="L121">    this.ingestRequestFactory = ingestRequestFactory;</span>
+<span class="fc" id="L122">  }</span>
+
+  /**
+   * To generate a default ATR KO from Ingest External on AV or MimeType checks.
+   *
+   * @param messageIdentifier
+   * @param archivalAgency
+   * @param transferringAgency
+   * @param eventType
+   * @param addedMessage might be null
+   * @param code
+   *
+   * @return the corresponding InputStream with the ATR KO in XML format
+   */
+  private static String buildAtrInternal(String messageIdentifier,
+                                         String archivalAgency,
+                                         String transferringAgency,
+                                         String eventType, String addedMessage,
+                                         StatusCode code,
+                                         LocalDateTime eventDateTime) {
+    String xmlDefault;
+    try {
+<span class="fc" id="L144">      xmlDefault = readInputStream(</span>
+<span class="fc" id="L145">          PropertiesUtils.getResourceAsStream(ATR_KO_DEFAULT_XML));</span>
+<span class="nc" id="L146">    } catch (final IOException e) {</span>
+      // Should not be, but in case, get the String equivalent
+<span class="nc" id="L148">      xmlDefault = &quot;&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;\n&quot; +</span>
+                   &quot;&lt;ArchiveTransferReply xmlns:xlink=\&quot;http://www.w3.org/1999/xlink\&quot;\n&quot; +
+                   &quot; xmlns:pr=\&quot;info:lc/xmlns/premis-v2\&quot;\n&quot; +
+                   &quot; xmlns=\&quot;fr:gouv:culture:archivesdefrance:seda:v2.1\&quot;\n&quot; +
+                   &quot; xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot;\n&quot; +
+                   &quot; xsi:schemaLocation=\&quot;fr:gouv:culture:archivesdefrance:seda:v2.1 seda-2.1-main.xsd\&quot;&gt;\n&quot; +
+                   &quot;    &lt;Comment&gt;#COMMENT#&lt;/Comment&gt;\n&quot; +
+                   &quot;    &lt;Date&gt;#MADATE#&lt;/Date&gt;\n&quot; +
+                   &quot;    &lt;MessageIdentifier&gt;#MESSAGE_IDENTIFIER#&lt;/MessageIdentifier&gt;\n&quot; +
+                   &quot;    \n&quot; + &quot;    &lt;CodeListVersions&gt;\n&quot; +
+                   &quot;        &lt;ReplyCodeListVersion&gt;ReplyCodeListVersion0&lt;/ReplyCodeListVersion&gt;\n&quot; +
+                   &quot;        &lt;MessageDigestAlgorithmCodeListVersion&gt;MessageDigestAlgorithmCodeListVersion0&lt;/MessageDigestAlgorithmCodeListVersion&gt;\n&quot; +
+                   &quot;        &lt;FileFormatCodeListVersion&gt;FileFormatCodeListVersion0&lt;/FileFormatCodeListVersion&gt;\n&quot; +
+                   &quot;    &lt;/CodeListVersions&gt;\n&quot; + &quot;\n&quot; +
+                   &quot;    &lt;ReplyCode&gt;#OUTCOME#&lt;/ReplyCode&gt;\n&quot; +
+                   &quot;    &lt;Operation&gt;\n&quot; + &quot;        &lt;Event&gt;\n&quot; +
+                   &quot;            &lt;EventTypeCode&gt;#EVENT_TYPE_CODE#&lt;/EventTypeCode&gt;\n&quot; +
+                   &quot;            &lt;EventType&gt;#EVENT_TYPE#&lt;/EventType&gt;\n&quot; +
+                   &quot;            &lt;EventDateTime&gt;#EVENT_DATE_TIME#&lt;/EventDateTime&gt;\n&quot; +
+                   &quot;            &lt;Outcome&gt;#OUTCOME#&lt;/Outcome&gt;\n&quot; +
+                   &quot;            &lt;OutcomeDetail&gt;#OUTCOME_DETAIL#&lt;/OutcomeDetail&gt;\n&quot; +
+                   &quot;            &lt;OutcomeDetailMessage&gt;#OUTCOME_DETAIL_MESSAGE#&lt;/OutcomeDetailMessage&gt;\n&quot; +
+                   &quot;        &lt;/Event&gt;\n&quot; + &quot;    &lt;/Operation&gt;\n&quot; + &quot;\n&quot; +
+                   &quot;    &lt;MessageRequestIdentifier&gt;Unknown&lt;/MessageRequestIdentifier&gt;\n&quot; +
+                   &quot;    &lt;ArchivalAgency&gt;\n&quot; +
+                   &quot;        &lt;Identifier&gt;#ARCHIVAL_AGENCY#&lt;/Identifier&gt;\n&quot; +
+                   &quot;    &lt;/ArchivalAgency&gt;\n&quot; + &quot;    &lt;TransferringAgency&gt;\n&quot; +
+                   &quot;        &lt;Identifier&gt;#TRANSFERRING_AGENCY#&lt;/Identifier&gt;\n&quot; +
+                   &quot;    &lt;/TransferringAgency&gt;\n&quot; + &quot;&lt;/ArchiveTransferReply&gt;\n&quot;;
+<span class="fc" id="L177">    }</span>
+<span class="fc" id="L178">    String detail = VitamLogbookMessages.getCodeOp(eventType, code);</span>
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">    if (addedMessage != null) {</span>
+<span class="fc" id="L180">      detail += addedMessage;</span>
+    }
+<span class="fc" id="L182">    String event = VitamLogbookMessages.getLabelOp(eventType);</span>
+<span class="fc" id="L183">    return xmlDefault.replace(DATE, LocalDateUtil.now().toString())</span>
+<span class="fc" id="L184">                     .replace(MESSAGE_IDENTIFIER, messageIdentifier)</span>
+<span class="fc" id="L185">                     .replace(ARCHIVAL_AGENCY, archivalAgency)</span>
+<span class="fc" id="L186">                     .replace(TRANSFERRING_AGENCY, transferringAgency)</span>
+<span class="fc" id="L187">                     .replace(COMMENT, detail)</span>
+<span class="fc" id="L188">                     .replace(EVENT_TYPE_CODE, eventType)</span>
+<span class="fc" id="L189">                     .replace(EVENT_TYPE, event)</span>
+<span class="fc" id="L190">                     .replace(EVENT_DATE_TIME, eventDateTime.toString())</span>
+<span class="fc" id="L191">                     .replaceAll(OUTCOME, code.name())</span>
+<span class="fc" id="L192">                     .replace(OUTCOME_DETAIL, eventType + &quot;.&quot; + code.name())</span>
+<span class="fc" id="L193">                     .replace(OUTCOME_DETAIL_MESSAGE, detail);</span>
+  }
+
+  /**
+   * Internal
+   *
+   * @param input to read
+   *
+   * @return String
+   *
+   * @throws IOException
+   */
+  private static String readInputStreamLimited(InputStream input, int limit)
+      throws IOException {
+<span class="fc" id="L207">    final StringBuilder builder = new StringBuilder();</span>
+<span class="fc" id="L208">    try (final InputStreamReader reader = new InputStreamReader(input)) {</span>
+<span class="fc" id="L209">      try (final BufferedReader buffered = new BufferedReader(reader)) {</span>
+        String line;
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        while ((line = buffered.readLine()) != null) {</span>
+<span class="fc" id="L212">          builder.append(line).append('\n');</span>
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">          if (builder.length() &gt;= limit) {</span>
+<span class="nc" id="L214">            break;</span>
+          }
+        }
+      }
+    }
+<span class="fc" id="L219">    return builder.toString();</span>
+  }
+
+  /**
+   * Internal
+   *
+   * @param input to read
+   *
+   * @return String
+   *
+   * @throws IOException
+   */
+  private static String readInputStream(InputStream input) throws IOException {
+<span class="fc" id="L232">    return readInputStreamLimited(input, Integer.MAX_VALUE);</span>
+  }
+
+  /**
+   * Get all existing IngestRequest and try to continue according to their
+   * status
+   *
+   * @param ingestRequestFactory
+   * @param client
+   * @param adminExternalClient
+   * @param ingestMonitor
+   */
+  void retryAllExistingFiles(final IngestRequestFactory ingestRequestFactory,
+                             final IngestExternalClient client,
+                             final AdminExternalClient adminExternalClient,
+                             final IngestMonitor ingestMonitor) {
+<span class="fc" id="L248">    List&lt;IngestRequest&gt; ingestRequests =</span>
+<span class="fc" id="L249">        ingestRequestFactory.getExistingIngests();</span>
+<span class="fc bfc" id="L250" title="All 2 branches covered.">    if (ingestRequests.isEmpty()) {</span>
+<span class="fc" id="L251">      return;</span>
+    }
+<span class="fc" id="L253">    ExecutorService executorService = Executors</span>
+<span class="fc" id="L254">        .newFixedThreadPool(ingestRequests.size(),</span>
+                            new WaarpThreadFactory(&quot;IngestManager&quot;));
+<span class="fc bfc" id="L256" title="All 2 branches covered.">    for (IngestRequest ingestRequest : ingestRequests) {</span>
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">      if (ingestMonitor.isShutdown()) {</span>
+<span class="nc" id="L258">        return;</span>
+      }
+<span class="fc" id="L260">      IngestManager task =</span>
+          new IngestManager(ingestRequest, adminExternalClient, client,
+                            ingestRequestFactory);
+<span class="fc" id="L263">      executorService.execute(task);</span>
+<span class="fc" id="L264">    }</span>
+    try {
+<span class="fc" id="L266">      Thread.sleep(ingestMonitor.getElapseTime());</span>
+<span class="nc" id="L267">    } catch (InterruptedException e) {//NOSONAR</span>
+<span class="nc" id="L268">      SysErrLogger.FAKE_LOGGER.ignoreLog(e);</span>
+<span class="fc" id="L269">    }</span>
+<span class="fc" id="L270">    executorService.shutdown();</span>
+<span class="fc bfc" id="L271" title="All 2 branches covered.">    while (!executorService.isTerminated()) {</span>
+      try {
+<span class="fc" id="L273">        executorService.awaitTermination(ingestMonitor.getElapseTime(),</span>
+                                         TimeUnit.MILLISECONDS);
+<span class="nc" id="L275">      } catch (InterruptedException e) {//NOSONAR</span>
+<span class="nc" id="L276">        SysErrLogger.FAKE_LOGGER.ignoreLog(e);</span>
+<span class="pc" id="L277">      }</span>
+    }
+<span class="fc" id="L279">    executorService.shutdownNow();</span>
+<span class="fc" id="L280">  }</span>
+
+  @Override
+  public void run() {
+<span class="fc" id="L284">    logger.warn(&quot;Will run {}&quot;, ingestRequest);</span>
+    try {
+<span class="fc bfc" id="L286" title="All 2 branches covered.">      while (runStep(ingestRequestFactory, client, adminExternalClient,</span>
+                     ingestRequest)) {
+        // Executing next step
+<span class="fc bfc" id="L289" title="All 2 branches covered.">        if (ingestRequest.getStep() == null) {</span>
+          // END
+<span class="fc" id="L291">          break;</span>
+        }
+<span class="fc" id="L293">        logger.debug(&quot;Will rerun {}&quot;, ingestRequest);</span>
+      }
+<span class="nc" id="L295">    } catch (InvalidParseOperationException e) {</span>
+      // very bad
+<span class="nc" id="L297">      logger.error(&quot;Very bad since cannot save IngestRequest&quot;, e);</span>
+<span class="fc" id="L298">    }</span>
+<span class="fc" id="L299">  }</span>
+
+  /**
+   * Rune next step for this IngestRequest
+   *
+   * @param ingestRequestFactory
+   * @param client
+   * @param adminExternalClient
+   * @param ingestRequest
+   *
+   * @return true if it is possible to run again the next step for this
+   *     IngestRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private boolean runStep(final IngestRequestFactory ingestRequestFactory,
+                          final IngestExternalClient client,
+                          final AdminExternalClient adminExternalClient,
+                          final IngestRequest ingestRequest)
+      throws InvalidParseOperationException {
+<span class="fc" id="L319">    IngestStep step = ingestRequest.getStep();</span>
+<span class="fc" id="L320">    logger.debug(&quot;Step is {} from {}&quot;, step, ingestRequest);</span>
+<span class="pc bpc" id="L321" title="2 of 8 branches missed.">    switch (step) {</span>
+      case STARTUP:
+        // Ignore: request not ready for the manager
+<span class="fc" id="L324">        break;</span>
+      case RETRY_INGEST:
+        // restart from ingest
+<span class="fc" id="L327">        logger.info(&quot;Start from Ingest: {}&quot;, ingestRequest);</span>
+<span class="fc" id="L328">        ingestLocally(ingestRequestFactory, ingestRequest, client);</span>
+<span class="fc" id="L329">        break;</span>
+      case RETRY_INGEST_ID:
+        // restart once ingest accepted but no feedback yet
+<span class="fc" id="L332">        logger.info(&quot;From Ingest Id: {}&quot;, ingestRequest);</span>
+<span class="fc" id="L333">        sendBackId(ingestRequestFactory, ingestRequest);</span>
+<span class="fc" id="L334">        break;</span>
+      case RETRY_ATR:
+        // restart from ATR
+<span class="fc" id="L337">        logger.info(&quot;From ATR: {}&quot;, ingestRequest);</span>
+<span class="fc" id="L338">        getStatusOfATR(ingestRequestFactory, ingestRequest, client,</span>
+<span class="fc" id="L339">                       adminExternalClient, ingestRequest.getVitamContext());</span>
+<span class="fc" id="L340">        break;</span>
+      case RETRY_ATR_FORWARD:
+        // Write back the content of the ATR through Waarp
+<span class="fc" id="L343">        logger.info(&quot;From ATR_FORWARD: {}&quot;, ingestRequest);</span>
+<span class="fc" id="L344">        File targetFile = ingestRequest.getAtrFile(ingestRequestFactory);</span>
+<span class="fc" id="L345">        sendATRFile(ingestRequestFactory, ingestRequest, targetFile);</span>
+<span class="fc" id="L346">        break;</span>
+      case ERROR:
+<span class="fc" id="L348">        logger.info(&quot;From Error: {}&quot;, ingestRequest);</span>
+<span class="fc" id="L349">        sendErrorBack(ingestRequestFactory, ingestRequest);</span>
+<span class="fc" id="L350">        break;</span>
+      case END:
+        // To be deleted
+<span class="nc" id="L353">        logger.info(&quot;End of Ingest: {}&quot;, ingestRequest);</span>
+<span class="nc" id="L354">        toDelete(ingestRequestFactory, ingestRequest);</span>
+<span class="nc" id="L355">        break;</span>
+      default:
+<span class="nc" id="L357">        throw new IllegalStateException(&quot;Unexpected value: &quot; + step);</span>
+    }
+<span class="fc" id="L359">    IngestStep newStep = ingestRequest.getStep();</span>
+<span class="pc bpc" id="L360" title="1 of 4 branches missed.">    return newStep != IngestStep.END &amp;&amp; newStep != step;</span>
+  }
+
+  /**
+   * Try to launch first step of Ingest (step 1)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param client
+   *
+   * @return 0 if OK, 1 if Warning, 2 if error
+   */
+  int ingestLocally(final IngestRequestFactory ingestRequestFactory,
+                    final IngestRequest ingestRequest,
+                    final IngestExternalClient client) {
+    try {
+      // Inform Vitam of an Ingest to proceed locally
+<span class="fc" id="L377">      ingestRequest.setStep(IngestStep.RETRY_INGEST, 0, ingestRequestFactory);</span>
+<span class="fc" id="L378">      VitamContext vitamContext = ingestRequest.getVitamContext();</span>
+<span class="fc" id="L379">      LocalFile localFile = ingestRequest.getLocalFile();</span>
+<span class="fc" id="L380">      RequestResponse requestResponse = client</span>
+<span class="fc" id="L381">          .ingestLocal(vitamContext, localFile, ingestRequest.getContextId(),</span>
+<span class="fc" id="L382">                       ingestRequest.getAction());</span>
+<span class="fc bfc" id="L383" title="All 2 branches covered.">      if (!requestResponse.isOk()) {</span>
+<span class="fc" id="L384">        String requestIdNew =</span>
+<span class="fc" id="L385">            requestResponse.getHeaderString(GlobalDataRest.X_REQUEST_ID);</span>
+<span class="pc bpc" id="L386" title="3 of 4 branches missed.">        if (requestIdNew == null || requestIdNew.isEmpty()) {</span>
+<span class="fc" id="L387">          requestIdNew = &quot;FAKE_REQUEST_ID&quot;;</span>
+        }
+<span class="fc" id="L389">        ingestRequest.setRequestId(requestIdNew);</span>
+<span class="fc" id="L390">        Status status = Status.fromStatusCode(requestResponse.getStatus());</span>
+<span class="fc bfc" id="L391" title="All 2 branches covered.">        switch (status) {</span>
+          case SERVICE_UNAVAILABLE:
+            // Should retry later on
+<span class="fc" id="L394">            logger.warn(ERROR_MESSAGE, &quot;Issue since service or ATR unavailable&quot;,</span>
+                        requestResponse);
+<span class="fc" id="L396">            ingestRequest</span>
+<span class="fc" id="L397">                .setStep(IngestStep.RETRY_INGEST, 0, ingestRequestFactory);</span>
+            // Next step is RETRY_INGEST
+<span class="fc" id="L399">            return 1;</span>
+          default:
+            // Very Bad: inform back of error
+<span class="fc" id="L402">            logger.error(ERROR_MESSAGE,</span>
+                         ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR,
+                         requestResponse);
+<span class="fc" id="L405">            ingestRequest.setStep(IngestStep.ERROR, status.getStatusCode(),</span>
+                                  ingestRequestFactory);
+            // Will inform back of error which could not be fixed when reloaded
+        }
+        // Next step is ERROR
+<span class="fc" id="L410">        return 2;</span>
+      }
+      // Ingest sent and accepted
+<span class="fc" id="L413">      RequestResponseOK responseOK = (RequestResponseOK) requestResponse;</span>
+<span class="fc" id="L414">      ingestRequest.setFromRequestResponse(responseOK);</span>
+
+      // Inform back of ID whatever: could be the last step
+<span class="fc bfc" id="L417" title="All 2 branches covered.">      return sendBackId(ingestRequestFactory, ingestRequest)? 0 : 1;</span>
+<span class="nc" id="L418">    } catch (InvalidParseOperationException e) {</span>
+<span class="nc" id="L419">      logger.error(&quot;FATAL: Issue since backup of request produces an error&quot;, e);</span>
+<span class="nc" id="L420">    } catch (IngestExternalException e) {</span>
+<span class="nc" id="L421">      logger.error(ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR, e);</span>
+      // Should retry ingest from the beginning
+      try {
+<span class="nc" id="L424">        ingestRequest.setStep(IngestStep.RETRY_INGEST, 0, ingestRequestFactory);</span>
+<span class="nc" id="L425">      } catch (InvalidParseOperationException ex) {</span>
+        // very bad
+<span class="nc" id="L427">        logger.error(&quot;FATAL: Very bad since cannot save IngestRequest&quot;, ex);</span>
+<span class="nc" id="L428">      }</span>
+<span class="nc" id="L429">    }</span>
+<span class="nc" id="L430">    return 2;</span>
+  }
+
+  /**
+   * Once IngestRequest started, send back the Id of the corresponding Vitam
+   * Ingest Id Operation (step 2)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   *
+   * @return True if done
+   *
+   * @throws InvalidParseOperationException
+   */
+  private boolean sendBackId(final IngestRequestFactory ingestRequestFactory,
+                             final IngestRequest ingestRequest)
+      throws InvalidParseOperationException {
+<span class="fc" id="L447">    File idMessage = new File(&quot;/tmp/&quot; + ingestRequest.getRequestId() + &quot;.xml&quot;);</span>
+    try {
+<span class="fc" id="L449">      String atr = buildAtrInternal(ingestRequest.getRequestId(),</span>
+                                    &quot;ArchivalAgencyToBeDefined&quot;,
+                                    &quot;TransferringAgencyToBeDefined&quot;,
+                                    INGEST_INT_UPLOAD, &quot;(Accepted by Vitam)&quot;,
+<span class="fc" id="L453">                                    StatusCode.STARTED, LocalDateUtil.now());</span>
+      try {
+<span class="fc" id="L455">        FileUtils.write(idMessage, atr, StandardCharsets.UTF_8);</span>
+<span class="nc" id="L456">      } catch (IOException e) {</span>
+        // very bad, so retry later on
+<span class="nc" id="L458">        logger.error(&quot;Very bad since cannot save pseudo ATR&quot;, e);</span>
+<span class="nc" id="L459">        ingestRequest</span>
+<span class="nc" id="L460">            .setStep(IngestStep.RETRY_INGEST_ID, 0, ingestRequestFactory);</span>
+<span class="nc" id="L461">        return false;</span>
+<span class="fc" id="L462">      }</span>
+<span class="fc" id="L463">      ingestRequest</span>
+<span class="fc" id="L464">          .setStep(IngestStep.RETRY_INGEST_ID, 0, ingestRequestFactory);</span>
+<span class="fc" id="L465">      if (ingestRequestFactory.getManagerToWaarp(ingestRequest)</span>
+<span class="fc bfc" id="L466" title="All 2 branches covered.">                              .sendBackInformation(ingestRequestFactory,</span>
+                                                   ingestRequest,
+<span class="fc" id="L468">                                                   idMessage.getAbsolutePath(),</span>
+                                                   INGEST_ID)) {
+        // Possibly (optional) waiting for ATR back or not
+<span class="fc bfc" id="L471" title="All 2 branches covered.">        if (ingestRequest.isCheckAtr()) {</span>
+<span class="fc" id="L472">          ingestRequest.setStep(IngestStep.RETRY_ATR, 0, ingestRequestFactory);</span>
+        } else {
+          // No ATR Back so Very end of this IngestRequest
+<span class="fc" id="L475">          toDelete(ingestRequestFactory, ingestRequest);</span>
+        }
+<span class="fc" id="L477">        return true;</span>
+      } else {
+        // Not sent, so retry later on
+<span class="fc" id="L480">        return false;</span>
+      }
+    } finally {
+      try {
+<span class="fc" id="L484">        Files.delete(idMessage.toPath());</span>
+<span class="nc" id="L485">      } catch (IOException e) {</span>
+<span class="nc" id="L486">        logger.debug(&quot;Temporary file not deleted {}&quot;,</span>
+<span class="nc" id="L487">                     idMessage.getAbsolutePath());</span>
+<span class="fc" id="L488">      }</span>
+    }
+  }
+
+  /**
+   * Get the ATR (step 3 if allowed)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param client
+   * @param adminExternalClient
+   * @param vitamContext
+   *
+   * @return True if OK
+   *
+   * @throws InvalidParseOperationException
+   */
+  boolean getStatusOfATR(final IngestRequestFactory ingestRequestFactory,
+                         final IngestRequest ingestRequest,
+                         final IngestExternalClient client,
+                         final AdminExternalClient adminExternalClient,
+                         final VitamContext vitamContext)
+      throws InvalidParseOperationException {
+<span class="fc" id="L511">    Response response = null;</span>
+    try {
+
+<span class="fc" id="L514">      ingestRequest.setStep(IngestStep.RETRY_ATR, 0, ingestRequestFactory);</span>
+<span class="fc" id="L515">      OperationCheck operationCheck = new OperationCheck(adminExternalClient);</span>
+<span class="fc bfc" id="L516" title="All 2 branches covered.">      if (operationCheck.checkAvailabilityAtr(ingestRequest.getTenantId(),</span>
+<span class="fc" id="L517">                                              ingestRequest.getRequestId())) {</span>
+<span class="fc" id="L518">        response = client</span>
+<span class="fc" id="L519">            .downloadObjectAsync(vitamContext, ingestRequest.getRequestId(),</span>
+                                 IngestCollection.ARCHIVETRANSFERREPLY);
+<span class="fc" id="L521">        Status status = Status.fromStatusCode(response.getStatus());</span>
+<span class="pc bpc" id="L522" title="1 of 3 branches missed.">        switch (status) {</span>
+          case OK:
+<span class="fc" id="L524">            sendATR(ingestRequestFactory, ingestRequest, response);</span>
+<span class="fc" id="L525">            return true;</span>
+          case SERVICE_UNAVAILABLE:
+          case NOT_FOUND:
+            // Should retry later on
+<span class="fc" id="L529">            logger.debug(&quot;Service or ATR unavailable yet\n\t{}&quot;,</span>
+<span class="fc" id="L530">                         status.getReasonPhrase());</span>
+<span class="fc" id="L531">            return false;</span>
+          default:
+            // Very Bad: inform back of error
+<span class="nc" id="L534">            logger.error(ERROR_MESSAGE,</span>
+                         ISSUE_SINCE_INGEST_PACKET_PRODUCES_AN_ERROR,
+<span class="nc" id="L536">                         status.getReasonPhrase());</span>
+<span class="nc" id="L537">            ingestRequest.setStep(IngestStep.ERROR, response.getStatus(),</span>
+                                  ingestRequestFactory);
+        }
+      }
+<span class="fc" id="L541">    } catch (VitamClientException e) {</span>
+<span class="fc" id="L542">      logger.warn(&quot;Issue since ingest client produces an error&quot;, e);</span>
+      // FIXME this does not take into account various cases since Vitam masks the real reason
+<span class="fc" id="L544">      ingestRequest.setStep(IngestStep.ERROR, 500, ingestRequestFactory);</span>
+    } finally {
+      // Shall read all InputStream
+<span class="fc" id="L547">      StreamUtils.consumeAnyEntityAndClose(response);</span>
+    }
+<span class="fc" id="L549">    return false;</span>
+  }
+
+  /**
+   * Send the ATR back to the Waarp Partner, directly from step 3 (ingest ATR
+   * retrieve) (step 4)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param response
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendATR(final IngestRequestFactory ingestRequestFactory,
+                       final IngestRequest ingestRequest,
+                       final Response response)
+      throws InvalidParseOperationException {
+<span class="fc" id="L566">    try (final InputStream inputStream = response</span>
+<span class="fc" id="L567">        .readEntity(InputStream.class)) {</span>
+      // Write file to be forwarded
+<span class="fc" id="L569">      File targetFile = ingestRequest.getAtrFile(ingestRequestFactory);</span>
+<span class="fc" id="L570">      Path target = targetFile.toPath();</span>
+<span class="fc" id="L571">      Files.copy(inputStream, target, REPLACE_EXISTING);</span>
+      // Write back the content of the ATR through Waarp
+<span class="fc" id="L573">      sendATRFile(ingestRequestFactory, ingestRequest, targetFile);</span>
+<span class="nc" id="L574">    } catch (IOException e) {</span>
+<span class="nc" id="L575">      logger</span>
+<span class="nc" id="L576">          .error(&quot;File must be writable or InputStream error during close&quot;, e);</span>
+<span class="nc" id="L577">      ingestRequest.setStep(IngestStep.ERROR,</span>
+<span class="nc" id="L578">                            Status.INTERNAL_SERVER_ERROR.getStatusCode(),</span>
+                            ingestRequestFactory);
+<span class="fc" id="L580">    }</span>
+<span class="fc" id="L581">  }</span>
+
+  /**
+   * Step to send ATR before finished (step 4)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   * @param targetFile
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendATRFile(final IngestRequestFactory ingestRequestFactory,
+                           final IngestRequest ingestRequest,
+                           final File targetFile)
+      throws InvalidParseOperationException {
+<span class="fc" id="L596">    ingestRequest</span>
+<span class="fc" id="L597">        .setStep(IngestStep.RETRY_ATR_FORWARD, 0, ingestRequestFactory);</span>
+<span class="fc" id="L598">    if (!ingestRequestFactory.getManagerToWaarp(ingestRequest)</span>
+<span class="fc bfc" id="L599" title="All 2 branches covered.">                             .sendBackInformation(ingestRequestFactory,</span>
+                                                  ingestRequest,
+<span class="fc" id="L601">                                                  targetFile.getAbsolutePath(),</span>
+                                                  ATR)) {
+      // ATR already there but not sent, so retry
+<span class="fc" id="L604">      ingestRequest</span>
+<span class="fc" id="L605">          .setStep(IngestStep.RETRY_ATR_FORWARD, 0, ingestRequestFactory);</span>
+    } else {
+<span class="fc" id="L607">      toDelete(ingestRequestFactory, ingestRequest);</span>
+    }
+<span class="fc" id="L609">  }</span>
+
+  /**
+   * Finalize IngestRequest, whatever Done or in Error (final step 5 in case
+   * of Done)
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void toDelete(final IngestRequestFactory ingestRequestFactory,
+                        final IngestRequest ingestRequest)
+      throws InvalidParseOperationException {
+    // Ensure it will not be reloaded
+<span class="fc" id="L624">    ingestRequest.setStep(IngestStep.END, 0, ingestRequestFactory);</span>
+<span class="pc bpc" id="L625" title="1 of 2 branches missed.">    if (!ingestRequestFactory.removeIngestRequest(ingestRequest)) {</span>
+<span class="nc" id="L626">      logger</span>
+<span class="nc" id="L627">          .error(&quot;Issue while cleaning this IngestRequest: {}&quot;, ingestRequest);</span>
+    } else {
+<span class="fc" id="L629">      logger.info(&quot;End of IngestRequest: {}&quot;, ingestRequest);</span>
+    }
+<span class="fc" id="L631">  }</span>
+
+  /**
+   * If in Error, will send back the status of the operation to the Waarp
+   * Partner before ending.
+   *
+   * @param ingestRequestFactory
+   * @param ingestRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendErrorBack(final IngestRequestFactory ingestRequestFactory,
+                             final IngestRequest ingestRequest)
+      throws InvalidParseOperationException {
+<span class="fc" id="L645">    logger.warn(&quot;Error to feedback since status not ok to restart: {}&quot;,</span>
+                ingestRequest);
+    // Feedback through Waarp
+<span class="fc" id="L648">    File file = ingestRequest.getAtrFile(ingestRequestFactory);</span>
+<span class="pc bpc" id="L649" title="1 of 2 branches missed.">    if (!file.canRead()) {</span>
+      // Create a pseudo one
+<span class="fc" id="L651">      String atr = buildAtrInternal(ingestRequest.getRequestId(),</span>
+                                    &quot;ArchivalAgencyToBeDefined&quot;,
+                                    &quot;TransferringAgencyToBeDefined&quot;,
+                                    INGEST_INT_UPLOAD,
+                                    &quot;(Issue during Ingest Step [&quot; +
+<span class="fc" id="L656">                                    ingestRequest.getStatus() +</span>
+                                    &quot;] while Waarp accessed to Vitam)&quot;,
+<span class="fc" id="L658">                                    StatusCode.FATAL, LocalDateUtil.now());</span>
+      try {
+<span class="fc" id="L660">        FileUtils.write(file, atr, StandardCharsets.UTF_8);</span>
+<span class="nc" id="L661">      } catch (IOException e) {</span>
+        // very bad
+<span class="nc" id="L663">        logger.error(&quot;Very bad since cannot save pseudo ATR&quot;, e);</span>
+<span class="nc" id="L664">        return;</span>
+<span class="fc" id="L665">      }</span>
+    }
+<span class="fc" id="L667">    if (ingestRequestFactory.getManagerToWaarp(ingestRequest)</span>
+<span class="pc bpc" id="L668" title="1 of 2 branches missed.">                            .sendBackInformation(ingestRequestFactory,</span>
+                                                 ingestRequest,
+<span class="fc" id="L670">                                                 file.getAbsolutePath(),</span>
+                                                 ATR_FAILED)) {
+      // Very end of this IngestRequest
+<span class="fc" id="L673">      toDelete(ingestRequestFactory, ingestRequest);</span>
+    }
+    // else Since not sent, will retry later on: keep as is
+<span class="fc" id="L676">  }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

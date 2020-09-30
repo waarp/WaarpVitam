@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DipRequest.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.dip</a> &gt; <span class="el_source">DipRequest.java</span></div><h1>DipRequest.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.dip;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.databind.JsonNode;
+import fr.gouv.vitam.common.GlobalDataRest;
+import fr.gouv.vitam.common.ParametersChecker;
+import fr.gouv.vitam.common.StringUtils;
+import fr.gouv.vitam.common.database.builder.query.VitamFieldsHelper;
+import fr.gouv.vitam.common.exception.InvalidParseOperationException;
+import fr.gouv.vitam.common.json.JsonHandler;
+import fr.gouv.vitam.common.model.RequestResponseOK;
+import org.waarp.common.exception.IllegalFiniteStateException;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.state.MachineState;
+import org.waarp.common.state.Transition;
+import org.waarp.vitam.common.AbstractVitamRequest;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
+
+import java.io.File;
+import java.util.EnumSet;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class DipRequest extends AbstractVitamRequest {
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L49">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L50">      WaarpLoggerFactory.getLogger(DipRequest.class);</span>
+<span class="fc" id="L51">  @JsonIgnore</span>
+<span class="fc" id="L52">  MachineState&lt;DIPStep&gt; step = DIPStep.newSessionMachineState();</span>
+
+<span class="fc" id="L54">  public DipRequest() {</span>
+    // Empty constructor for Json
+<span class="fc" id="L56">  }</span>
+
+  /**
+   * Standard constructor
+   *
+   * @param taskOption
+   * @param factory
+   *
+   * @throws InvalidParseOperationException
+   */
+  public DipRequest(final TaskOption taskOption,
+                    final DipRequestFactory factory)
+      throws InvalidParseOperationException {
+<span class="fc" id="L69">    super(taskOption);</span>
+<span class="fc" id="L70">    this.status = this.step.getCurrent().getStatusMonitor();</span>
+    try {
+<span class="fc" id="L72">      factory.saveNewDipRequest(this);</span>
+<span class="nc" id="L73">    } catch (InvalidParseOperationException e) {</span>
+<span class="nc" id="L74">      logger.error(&quot;Will not be able to save: {}&quot;, this, e);</span>
+<span class="nc" id="L75">      throw e;</span>
+<span class="fc" id="L76">    }</span>
+<span class="fc" id="L77">  }</span>
+
+  @Override
+  public String toString() {
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">    return &quot;DIP = Step: &quot; + (step != null? step.getCurrent() : &quot;noStep&quot;) + &quot; &quot; +</span>
+<span class="fc" id="L82">           JsonHandler.unprettyPrint(this);</span>
+  }
+
+  /**
+   * Set extra information from first response from operation submission
+   *
+   * @param requestResponse
+   *
+   * @return this
+   */
+  @JsonIgnore
+  public DipRequest setFromRequestResponse(RequestResponseOK requestResponse) {
+<span class="fc" id="L94">    String requestIdNew =</span>
+<span class="fc" id="L95">        requestResponse.getHeaderString(GlobalDataRest.X_REQUEST_ID);</span>
+    // Shall be the same but get from Result preferred
+<span class="fc" id="L97">    JsonNode node = (JsonNode) requestResponse.getFirstResult();</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">    if (node != null) {</span>
+<span class="fc" id="L99">      node = node.get(VitamFieldsHelper.id());</span>
+<span class="pc bpc" id="L100" title="1 of 2 branches missed.">      if (node != null) {</span>
+<span class="fc" id="L101">        requestIdNew = node.asText();</span>
+      }
+    }
+    try {
+<span class="fc" id="L105">      ParametersChecker.checkParameterDefault(getCheckMessage(), requestIdNew);</span>
+<span class="fc" id="L106">      StringUtils.checkSanityString(requestIdNew);</span>
+<span class="nc" id="L107">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L108">      logger.error(e);</span>
+<span class="nc" id="L109">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L110">    }</span>
+<span class="fc" id="L111">    setRequestId(requestIdNew);</span>
+<span class="fc" id="L112">    return this;</span>
+  }
+
+  /**
+   * Use to set the step and status accordingly.
+   *
+   * @param step
+   * @param status
+   * @param factory
+   *
+   * @return this
+   *
+   * @throws InvalidParseOperationException
+   */
+  @JsonIgnore
+  public DipRequest setStep(final DIPStep step, final int status,
+                            DipRequestFactory factory)
+      throws InvalidParseOperationException {
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">    if (this.step == null) {</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">      if (!step.equals(DIPStep.END)) {</span>
+<span class="nc" id="L132">        logger.debug(&quot;Step {} could not be set since IngestRequest done&quot;, step);</span>
+      }
+      // Nothing to do since already done
+<span class="nc" id="L135">      return this;</span>
+    }
+<span class="fc bfc" id="L137" title="All 4 branches covered.">    if (!step.equals(DIPStep.ERROR) &amp;&amp; this.step.getCurrent().equals(step)) {</span>
+      // nothing to do
+<span class="fc" id="L139">      return this;</span>
+    }
+    try {
+<span class="fc" id="L142">      this.step.setCurrent(step);</span>
+<span class="nc" id="L143">    } catch (IllegalFiniteStateException e) {</span>
+<span class="nc" id="L144">      logger.error(e);</span>
+<span class="nc" id="L145">      this.step.setDryCurrent(step);</span>
+<span class="fc" id="L146">    }</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">    setStatus(step != DIPStep.ERROR? step.getStatusMonitor() : status)</span>
+<span class="fc" id="L148">        .setLastTryTime(System.currentTimeMillis());</span>
+<span class="fc" id="L149">    return save(factory);</span>
+  }
+
+  /**
+   * Set the status AND the step according to the value of the status (if
+   * less than 0, it is a step value, not a final status), but in dry mode
+   * (no check, used by Json deserialization)
+   *
+   * @param status
+   *
+   * @return this
+   */
+  @JsonSetter(&quot;status&quot;)
+  public DipRequest setStatus(final int status) {
+<span class="fc" id="L163">    this.status = status;</span>
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">    if (step != null) {</span>
+<span class="fc" id="L165">      step.setDryCurrent(DIPStep.getFromInt(status));</span>
+    }
+<span class="fc" id="L167">    return this;</span>
+  }
+
+  /**
+   * Save this DipRequest
+   *
+   * @param factory
+   *
+   * @return this
+   *
+   * @throws InvalidParseOperationException
+   */
+  @JsonIgnore
+  public DipRequest save(DipRequestFactory factory)
+      throws InvalidParseOperationException {
+<span class="fc" id="L182">    factory.saveDipRequest(this);</span>
+<span class="fc" id="L183">    return this;</span>
+  }
+
+  @JsonIgnore
+  public DIPStep getStep() {
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">    if (step == null) {</span>
+<span class="nc" id="L189">      return null;</span>
+    }
+<span class="fc" id="L191">    return step.getCurrent();</span>
+  }
+
+  /**
+   * @return the DIP File pointer according to this
+   */
+  @JsonIgnore
+  public File getDipFile(DipRequestFactory factory) {
+<span class="fc" id="L199">    return factory.getDipFile(this);</span>
+  }
+
+  /**
+   * @return the Error File pointer according to this
+   */
+  @JsonIgnore
+  public File getErrorFile(DipRequestFactory factory) {
+<span class="fc" id="L207">    return factory.getErrorFile(this);</span>
+  }
+
+  /**
+   * @return the JsonNode for Vitam Request associated with this
+   *
+   * @throws InvalidParseOperationException
+   */
+  @JsonIgnore
+  public JsonNode getSelectJson() throws InvalidParseOperationException {
+<span class="fc" id="L217">    String path = getPath();</span>
+<span class="fc" id="L218">    return JsonHandler.getFromFile(new File(path));</span>
+  }
+
+  /**
+   * Different steps of DIP export from Waarp point of view
+   */
+<span class="fc" id="L224">  enum DIPStep {</span>
+    /**
+     * DipRequest not started yet
+     */
+<span class="fc" id="L228">    STARTUP(-1),</span>
+    /**
+     * DipRequest SELECT to retry
+     */
+<span class="fc" id="L232">    RETRY_SELECT(-2),</span>
+    /**
+     * DipRequest DIP get to retry
+     */
+<span class="fc" id="L236">    RETRY_DIP(-3),</span>
+    /**
+     * DipRequest DIP to forward
+     */
+<span class="fc" id="L240">    RETRY_DIP_FORWARD(-4),</span>
+    /**
+     * For Ingest compatibility
+     */
+<span class="fc" id="L244">    NO_STEP(-5),</span>
+    /**
+     * DipRequest Error
+     */
+<span class="fc" id="L248">    ERROR(-7),</span>
+    /**
+     * Final End step
+     */
+<span class="fc" id="L252">    END(-10);</span>
+
+<span class="fc" id="L254">    private static final ConcurrentHashMap&lt;DIPStep, EnumSet&lt;DIPStep&gt;&gt; stateMap =</span>
+        new ConcurrentHashMap&lt;&gt;();
+
+    static {
+<span class="fc" id="L258">      initR66FiniteStates();</span>
+<span class="fc" id="L259">    }</span>
+
+    private final int statusMonitor;
+
+<span class="fc" id="L263">    DIPStep(int status) {</span>
+<span class="fc" id="L264">      this.statusMonitor = status;</span>
+<span class="fc" id="L265">    }</span>
+
+    /**
+     * This method should be called once at startup to initialize the Finite
+     * States association.
+     */
+    private static void initR66FiniteStates() {
+<span class="fc bfc" id="L272" title="All 2 branches covered.">      for (final DIPStep.IngestTransition trans : DIPStep.IngestTransition</span>
+<span class="fc" id="L273">          .values()) {</span>
+<span class="fc" id="L274">        stateMap.put(trans.elt.getState(), trans.elt.getSet());</span>
+      }
+<span class="fc" id="L276">    }</span>
+
+    /**
+     * @return a new Session MachineState for OpenR66
+     */
+    private static MachineState&lt;DIPStep&gt; newSessionMachineState() {
+<span class="fc" id="L282">      return new MachineState&lt;&gt;(STARTUP, stateMap);</span>
+    }
+
+    /**
+     * @param machine the Session MachineState to release
+     */
+    static void endSessionMachineSate(MachineState&lt;DIPStep&gt; machine) {
+<span class="pc bpc" id="L289" title="1 of 2 branches missed.">      if (machine != null) {</span>
+<span class="fc" id="L290">        machine.release();</span>
+      }
+<span class="fc" id="L292">    }</span>
+
+    static DIPStep getFromInt(int status) {
+<span class="pc bpc" id="L295" title="1 of 7 branches missed.">      switch (status) {</span>
+        case -1:
+<span class="fc" id="L297">          return STARTUP;</span>
+        case -2:
+<span class="fc" id="L299">          return RETRY_SELECT;</span>
+        case -3:
+<span class="fc" id="L301">          return RETRY_DIP;</span>
+        case -4:
+<span class="fc" id="L303">          return RETRY_DIP_FORWARD;</span>
+        case -5:
+<span class="nc" id="L305">          return NO_STEP;</span>
+        case -10:
+<span class="fc" id="L307">          return END;</span>
+        case -7:
+        default:
+<span class="fc" id="L310">          return ERROR;</span>
+      }
+    }
+
+    int getStatusMonitor() {
+<span class="fc" id="L315">      return statusMonitor;</span>
+    }
+
+<span class="fc" id="L318">    private enum IngestTransition {</span>
+<span class="fc" id="L319">      T_STARTUP(STARTUP, EnumSet.of(RETRY_SELECT, ERROR)),</span>
+<span class="fc" id="L320">      T_RETRY_SELECT(RETRY_SELECT, EnumSet.of(RETRY_DIP, ERROR)),</span>
+<span class="fc" id="L321">      T_RETRY_DIP(RETRY_DIP, EnumSet.of(RETRY_DIP_FORWARD, ERROR, END)),</span>
+<span class="fc" id="L322">      T_RETRY_DIP_FORWARD(RETRY_DIP_FORWARD, EnumSet.of(END, ERROR)),</span>
+<span class="fc" id="L323">      T_ERROR(ERROR, EnumSet.of(ERROR, END)), T_END(END, EnumSet.of(END));</span>
+
+      private final Transition&lt;DIPStep&gt; elt;
+
+<span class="fc" id="L327">      IngestTransition(DIPStep state, EnumSet&lt;DIPStep&gt; set) {</span>
+<span class="fc" id="L328">        elt = new Transition&lt;&gt;(state, set);</span>
+<span class="fc" id="L329">      }</span>
+
+    }
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WaarpCommon.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.common</a> &gt; <span class="el_source">WaarpCommon.java</span></div><h1>WaarpCommon.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.common;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.waarp.common.exception.InvalidArgumentException;
+import org.waarp.common.logging.SysErrLogger;
+import org.waarp.common.utility.ParametersChecker;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
+/**
+ * Utility common to Ingest and DIP
+ */
+public class WaarpCommon {
+  public static final String FOR_SIMPLE_MANDATORY_ARGUMENTS =
+      &quot;(*) for mandatory arguments&quot;;
+  public static final String FOR_MANDATORY_ARGUMENTS =
+      &quot;(*) for mandatory arguments, (+) except if -o config option&quot;;
+  public static final String CONFIGURATION_FILE_CANNOT_BE_READ =
+      &quot;Configuration file cannot be read: &quot;;
+<span class="fc" id="L49">  private static final Option WAARP =</span>
+<span class="fc" id="L50">      Option.builder(&quot;w&quot;).longOpt(&quot;waarp&quot;).hasArg(true).required(true)</span>
+<span class="fc" id="L51">            .desc(&quot;(*) Waarp configuration file&quot;).build();</span>
+<span class="fc" id="L52">  private static final Option WAARP_MODEL =</span>
+<span class="fc" id="L53">      Option.builder(&quot;m&quot;).longOpt(&quot;model&quot;).hasArg(true).required(false).desc(</span>
+          &quot;Waarp model between R66 or a specific script file &quot; +
+<span class="fc" id="L55">          &quot;that do send to the partner&quot;).build();</span>
+<span class="fc" id="L56">  private static final Option WAARP_NR =</span>
+<span class="fc" id="L57">      Option.builder(&quot;w&quot;).longOpt(&quot;waarp&quot;).hasArg(true).required(false)</span>
+<span class="fc" id="L58">            .desc(&quot;(*) Waarp configuration file&quot;).build();</span>
+<span class="fc" id="L59">  private static final Option HELP =</span>
+<span class="fc" id="L60">      Option.builder(&quot;h&quot;).longOpt(&quot;help&quot;).hasArg(false)</span>
+<span class="fc" id="L61">            .desc(&quot;Get the corresponding help&quot;).build();</span>
+<span class="fc" id="L62">  private static final Options HELP_ONLY = new Options().addOption(HELP);</span>
+
+  private WaarpCommon() {
+    // Nothing
+  }
+
+  /**
+   * Check if help is required
+   *
+   * @param args
+   *
+   * @return True if help required
+   *
+   * @throws ParseException
+   */
+  public static boolean checkHelp(String[] args) {
+<span class="fc" id="L78">    CommandLineParser parser = new DefaultParser();</span>
+<span class="fc" id="L79">    CommandLine first = null;</span>
+    try {
+<span class="fc" id="L81">      first = parser.parse(HELP_ONLY, args, true);</span>
+<span class="fc" id="L82">      return first.hasOption('h');</span>
+<span class="nc" id="L83">    } catch (ParseException ignore) {//NOSONAR</span>
+<span class="nc" id="L84">      SysErrLogger.FAKE_LOGGER.ignoreLog(ignore);</span>
+    }
+<span class="nc" id="L86">    return false;</span>
+  }
+
+  /**
+   * TaskOption class
+   */
+  public static class TaskOption {
+<span class="fc" id="L93">    private static final Option FILE =</span>
+<span class="fc" id="L94">        Option.builder(&quot;f&quot;).longOpt(&quot;file&quot;).required(true).hasArg(true)</span>
+<span class="fc" id="L95">              .desc(&quot;(*) Path of the local file&quot;).build();</span>
+<span class="fc" id="L96">    private static final Option TENANT =</span>
+<span class="fc" id="L97">        Option.builder(&quot;t&quot;).longOpt(&quot;tenant&quot;).required(true).hasArg(true)</span>
+<span class="fc" id="L98">              .type(Number.class).desc(&quot;(+) Tenant Id&quot;).build();</span>
+<span class="fc" id="L99">    private static final Option ACCESS =</span>
+<span class="fc" id="L100">        Option.builder(&quot;a&quot;).longOpt(&quot;access&quot;).required(true).hasArg(true)</span>
+<span class="fc" id="L101">              .desc(&quot;(+) Access Contract&quot;).build();</span>
+<span class="fc" id="L102">    private static final Option PARTNER =</span>
+<span class="fc" id="L103">        Option.builder(&quot;p&quot;).longOpt(&quot;partner&quot;).required(true).hasArg(true)</span>
+<span class="fc" id="L104">              .desc(&quot;(+) Waarp Partner&quot;).build();</span>
+<span class="fc" id="L105">    private static final Option RULE =</span>
+<span class="fc" id="L106">        Option.builder(&quot;r&quot;).longOpt(&quot;rule&quot;).required(true).hasArg(true)</span>
+<span class="fc" id="L107">              .desc(&quot;(+) Waarp Rule&quot;).build();</span>
+<span class="fc" id="L108">    private static final Option SESSION =</span>
+<span class="fc" id="L109">        Option.builder(&quot;s&quot;).longOpt(&quot;session&quot;).hasArg(true)</span>
+<span class="fc" id="L110">              .desc(&quot;Application Session Id&quot;).build();</span>
+<span class="fc" id="L111">    private static final Option CERTIFICATE =</span>
+<span class="fc" id="L112">        Option.builder(&quot;c&quot;).longOpt(&quot;certificate&quot;).hasArg(true)</span>
+<span class="fc" id="L113">              .desc(&quot;Personal Certificate&quot;).build();</span>
+<span class="fc" id="L114">    private static final Option CONF =</span>
+<span class="fc" id="L115">        Option.builder(&quot;o&quot;).longOpt(&quot;conf&quot;).hasArg(true).desc(</span>
+            &quot;(+) Configuration file containing tenant, access, partner, rule,&quot; +
+            &quot; waarp, certificate options. &quot; +
+            &quot;Any specific options set independently will &quot; +
+<span class="fc" id="L119">            &quot;replace the value contained in this file&quot;).build();</span>
+<span class="fc" id="L120">    private static final Option TENANT_NR =</span>
+<span class="fc" id="L121">        Option.builder(TENANT.getOpt()).longOpt(TENANT.getLongOpt())</span>
+<span class="fc" id="L122">              .required(false).hasArg(true).type(Number.class)</span>
+<span class="fc" id="L123">              .desc(TENANT.getDescription()).build();</span>
+<span class="fc" id="L124">    private static final Option ACCESS_NR =</span>
+<span class="fc" id="L125">        Option.builder(ACCESS.getOpt()).longOpt(ACCESS.getLongOpt())</span>
+<span class="fc" id="L126">              .required(false).hasArg(true).desc(ACCESS.getDescription())</span>
+<span class="fc" id="L127">              .build();</span>
+<span class="fc" id="L128">    private static final Option PARTNER_NR =</span>
+<span class="fc" id="L129">        Option.builder(PARTNER.getOpt()).longOpt(PARTNER.getLongOpt())</span>
+<span class="fc" id="L130">              .required(false).hasArg(true).desc(PARTNER.getDescription())</span>
+<span class="fc" id="L131">              .build();</span>
+<span class="fc" id="L132">    private static final Option RULE_NR =</span>
+<span class="fc" id="L133">        Option.builder(RULE.getOpt()).longOpt(RULE.getLongOpt()).required(false)</span>
+<span class="fc" id="L134">              .hasArg(true).desc(RULE.getDescription()).build();</span>
+<span class="fc" id="L135">    private static final Options STANDARD =</span>
+<span class="fc" id="L136">        new Options().addOption(FILE).addOption(SESSION).addOption(CONF)</span>
+<span class="fc" id="L137">                     .addOption(CERTIFICATE).addOption(TENANT_NR)</span>
+<span class="fc" id="L138">                     .addOption(ACCESS_NR).addOption(PARTNER_NR)</span>
+<span class="fc" id="L139">                     .addOption(RULE_NR).addOption(WAARP_MODEL)</span>
+<span class="fc" id="L140">                     .addOption(WAARP_NR).addOption(HELP);</span>
+<span class="fc" id="L141">    private static final Options MANDATORY_NO_CONF =</span>
+<span class="fc" id="L142">        new Options().addOption(FILE).addOption(SESSION).addOption(CONF)</span>
+<span class="fc" id="L143">                     .addOption(TENANT).addOption(ACCESS).addOption(CERTIFICATE)</span>
+<span class="fc" id="L144">                     .addOption(PARTNER).addOption(RULE).addOption(WAARP_MODEL)</span>
+<span class="fc" id="L145">                     .addOption(WAARP);</span>
+
+    private final String waarpConfigurationFile;
+    private final String path;
+    private final int tenantId;
+    private final String applicationSessionId;
+    private final String personalCertificate;
+    private final String accessContract;
+    private final String waarpPartner;
+    private final String waarpRule;
+    private final String waarpModel;
+
+    public TaskOption(final String waarpConfigurationFile, final String path,
+                      final int tenantId, final String applicationSessionId,
+                      final String personalCertificate,
+                      final String accessContract, final String waarpPartner,
+                      final String waarpRule, final String waarpModel)
+<span class="fc" id="L162">        throws ParseException {</span>
+      try {
+<span class="fc" id="L164">        ParametersChecker</span>
+<span class="fc" id="L165">            .checkParameter(&quot;Arguments should be clean and not null&quot;,</span>
+                            waarpConfigurationFile, path, accessContract,
+                            waarpPartner, waarpRule);
+<span class="fc" id="L168">        ParametersChecker</span>
+<span class="fc" id="L169">            .checkSanityString(waarpConfigurationFile, path, accessContract,</span>
+                               waarpPartner, waarpRule, waarpModel,
+                               applicationSessionId, personalCertificate);
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">        if (tenantId &lt; 0) {</span>
+<span class="nc" id="L173">          throw new ParseException(&quot;Illegal value&quot;);</span>
+        }
+<span class="nc" id="L175">      } catch (IllegalArgumentException | InvalidArgumentException e) {</span>
+<span class="nc" id="L176">        throw new ParseException(&quot;Incorrect arguments&quot;);</span>
+<span class="fc" id="L177">      }</span>
+<span class="fc" id="L178">      this.waarpConfigurationFile = waarpConfigurationFile;</span>
+<span class="fc" id="L179">      this.path = path;</span>
+<span class="fc" id="L180">      this.tenantId = tenantId;</span>
+<span class="fc" id="L181">      this.applicationSessionId = applicationSessionId;</span>
+<span class="fc" id="L182">      this.personalCertificate = personalCertificate;</span>
+<span class="fc" id="L183">      this.accessContract = accessContract;</span>
+<span class="fc" id="L184">      this.waarpPartner = waarpPartner;</span>
+<span class="fc" id="L185">      this.waarpRule = waarpRule;</span>
+<span class="fc" id="L186">      this.waarpModel = waarpModel;</span>
+<span class="fc" id="L187">    }</span>
+
+    /**
+     * Standard options for Task
+     *
+     * @param options
+     */
+    public static void setStandardTaskOptions(Options options) {
+<span class="fc bfc" id="L195" title="All 2 branches covered.">      for (Option option : STANDARD.getOptions()) {</span>
+<span class="fc" id="L196">        options.addOption(option);</span>
+<span class="fc" id="L197">      }</span>
+<span class="fc" id="L198">    }</span>
+
+    /**
+     * @param cmd
+     *
+     * @return the TaskOption from CommandLine
+     *
+     * @throws ParseException
+     */
+    public static TaskOption getTaskOption(final CommandLine cmd,
+                                           final String[] args)
+        throws ParseException {
+<span class="fc" id="L210">      CommandLineParser parser = new DefaultParser();</span>
+<span class="fc" id="L211">      Properties properties = new Properties();</span>
+<span class="fc bfc" id="L212" title="All 2 branches covered.">      if (cmd.hasOption('o')) {</span>
+        // Use Configuration file
+<span class="fc" id="L214">        File conf = new File(cmd.getOptionValue('o'));</span>
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        if (!conf.canRead()) {</span>
+<span class="nc" id="L216">          throw new ParseException(</span>
+<span class="nc" id="L217">              CONFIGURATION_FILE_CANNOT_BE_READ + conf.getAbsolutePath());</span>
+        }
+<span class="fc" id="L219">        try (InputStream inputStream = new FileInputStream(conf)) {</span>
+<span class="fc" id="L220">          properties.load(inputStream);</span>
+<span class="nc" id="L221">        } catch (IOException e) {</span>
+<span class="nc" id="L222">          throw new ParseException(</span>
+<span class="nc" id="L223">              CONFIGURATION_FILE_CANNOT_BE_READ + conf.getAbsolutePath() +</span>
+<span class="nc" id="L224">              &quot; since &quot; + e.getMessage());</span>
+<span class="fc" id="L225">        }</span>
+<span class="fc" id="L226">      } else {</span>
+        // Check mandatory parameters if not using Configuration file
+<span class="fc" id="L228">        parser.parse(MANDATORY_NO_CONF, args, true);</span>
+      }
+<span class="fc" id="L230">      final String stenant = properties.getProperty(TENANT.getLongOpt(),</span>
+<span class="fc" id="L231">                                                    cmd.getOptionValue(</span>
+<span class="fc" id="L232">                                                        TENANT.getOpt()));</span>
+<span class="fc" id="L233">      final String accessContract = properties.getProperty(ACCESS.getLongOpt(),</span>
+<span class="fc" id="L234">                                                           cmd.getOptionValue(</span>
+                                                               ACCESS
+<span class="fc" id="L236">                                                                   .getOpt()));</span>
+<span class="fc" id="L237">      final String personalCertificate = properties</span>
+<span class="fc" id="L238">          .getProperty(CERTIFICATE.getLongOpt(),</span>
+<span class="fc" id="L239">                       cmd.getOptionValue(CERTIFICATE.getOpt(), null));</span>
+<span class="fc" id="L240">      final String waarpPartner = properties.getProperty(PARTNER.getLongOpt(),</span>
+<span class="fc" id="L241">                                                         cmd.getOptionValue(</span>
+<span class="fc" id="L242">                                                             PARTNER.getOpt()));</span>
+<span class="fc" id="L243">      final String waarpRule = properties</span>
+<span class="fc" id="L244">          .getProperty(RULE.getLongOpt(), cmd.getOptionValue(RULE.getOpt()));</span>
+<span class="fc" id="L245">      final String waarpConfiguration = properties</span>
+<span class="fc" id="L246">          .getProperty(WAARP.getLongOpt(), cmd.getOptionValue(WAARP.getOpt()));</span>
+<span class="fc" id="L247">      final String path = cmd.getOptionValue('f');</span>
+      final String applicationSessionId;
+      final String waarpModel;
+
+<span class="pc bpc" id="L251" title="1 of 2 branches missed.">      if (cmd.hasOption('m')) {</span>
+<span class="nc" id="L252">        String temp = cmd.getOptionValue('m');</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if (temp.isEmpty()) {</span>
+<span class="nc" id="L254">          temp = null;</span>
+        }
+<span class="nc" id="L256">        waarpModel = temp;</span>
+<span class="nc" id="L257">      } else {</span>
+<span class="fc" id="L258">        waarpModel = null;</span>
+      }
+<span class="fc bfc" id="L260" title="All 2 branches covered.">      if (cmd.hasOption('s')) {</span>
+<span class="fc" id="L261">        String temp = cmd.getOptionValue('s');</span>
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">        if (temp.isEmpty()) {</span>
+<span class="nc" id="L263">          temp = null;</span>
+        }
+<span class="fc" id="L265">        applicationSessionId = temp;</span>
+<span class="fc" id="L266">      } else {</span>
+<span class="fc" id="L267">        applicationSessionId = null;</span>
+      }
+      final int tenantId;
+      try {
+<span class="fc" id="L271">        tenantId = Integer.parseInt(stenant);</span>
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        if (tenantId &lt; 0) {</span>
+<span class="nc" id="L273">          throw new NumberFormatException(&quot;Tenant Id must be positive&quot;);</span>
+        }
+<span class="fc" id="L275">      } catch (NumberFormatException e) {</span>
+<span class="fc" id="L276">        throw new ParseException(&quot;Tenant Id must be a positive integer&quot;);</span>
+<span class="fc" id="L277">      }</span>
+<span class="fc" id="L278">      return new TaskOption(waarpConfiguration, path, tenantId,</span>
+                            applicationSessionId, personalCertificate,
+                            accessContract, waarpPartner, waarpRule,
+                            waarpModel);
+    }
+
+    public String getWaarpConfigurationFile() {
+<span class="fc" id="L285">      return waarpConfigurationFile;</span>
+    }
+
+    public String getPath() {
+<span class="fc" id="L289">      return path;</span>
+    }
+
+    public int getTenantId() {
+<span class="fc" id="L293">      return tenantId;</span>
+    }
+
+    public String getApplicationSessionId() {
+<span class="fc" id="L297">      return applicationSessionId;</span>
+    }
+
+    public String getPersonalCertificate() {
+<span class="fc" id="L301">      return personalCertificate;</span>
+    }
+
+    public String getAccessContract() {
+<span class="fc" id="L305">      return accessContract;</span>
+    }
+
+    public String getWaarpPartner() {
+<span class="fc" id="L309">      return waarpPartner;</span>
+    }
+
+    public String getWaarpRule() {
+<span class="fc" id="L313">      return waarpRule;</span>
+    }
+
+    public String getWaarpModel() {
+<span class="fc" id="L317">      return waarpModel;</span>
+    }
+  }
+
+  /**
+   * MonitorOption class
+   */
+  public static class MonitorOption {
+    private final String stopFilePath;
+    private final String waarpConfiguration;
+    private final int elapseInSecond;
+
+    public MonitorOption(final String stopFilePath,
+                         final String waarpConfiguration,
+<span class="fc" id="L331">                         final int elapseInSecond) throws ParseException {</span>
+      try {
+<span class="fc" id="L333">        ParametersChecker</span>
+<span class="fc" id="L334">            .checkParameter(&quot;Arguments should be clean and not null&quot;,</span>
+                            stopFilePath, waarpConfiguration);
+<span class="fc" id="L336">        ParametersChecker.checkSanityString(stopFilePath, waarpConfiguration);</span>
+<span class="pc bpc" id="L337" title="1 of 2 branches missed.">        if (elapseInSecond &lt; 0) {</span>
+<span class="nc" id="L338">          throw new ParseException(&quot;Illegal value&quot;);</span>
+        }
+<span class="nc" id="L340">      } catch (IllegalArgumentException | InvalidArgumentException e) {</span>
+<span class="nc" id="L341">        throw new ParseException(&quot;Incorrect arguments&quot;);</span>
+<span class="fc" id="L342">      }</span>
+<span class="fc" id="L343">      this.stopFilePath = stopFilePath;</span>
+<span class="fc" id="L344">      this.waarpConfiguration = waarpConfiguration;</span>
+<span class="fc" id="L345">      this.elapseInSecond = elapseInSecond;</span>
+<span class="fc" id="L346">    }</span>
+
+    /**
+     * Standard options for Monitor
+     *
+     * @param options
+     */
+    public static void setStandardMonitorOptions(Options options) {
+<span class="fc" id="L354">      options</span>
+<span class="fc" id="L355">          .addRequiredOption(&quot;s&quot;, &quot;stopfile&quot;, true, &quot;(*) Path of the stop file&quot;)</span>
+<span class="fc" id="L356">          .addOption(Option.builder(&quot;e&quot;).longOpt(&quot;elapse&quot;).hasArg(true)</span>
+<span class="fc" id="L357">                           .type(Number.class).desc(&quot;Elapse time in seconds&quot;)</span>
+<span class="fc" id="L358">                           .build()).addOption(WAARP).addOption(HELP);</span>
+<span class="fc" id="L359">    }</span>
+
+    /**
+     * Standard options for Monitor
+     *
+     * @param options
+     */
+    public static void addRetryMonitorOptions(Options options) {
+<span class="fc" id="L367">      options.addOption(</span>
+<span class="fc" id="L368">          Option.builder(&quot;r&quot;).longOpt(&quot;retry&quot;).hasArg(true).type(Number.class)</span>
+<span class="fc" id="L369">                .desc(&quot;Retry for pooling operation (default 3)&quot;).build())</span>
+<span class="fc" id="L370">             .addOption(Option.builder(&quot;d&quot;).longOpt(&quot;delay&quot;).hasArg(true)</span>
+<span class="fc" id="L371">                              .type(Number.class).desc(</span>
+                     &quot;Delay between 2 retries for pooling in ms greater than &quot; +
+<span class="fc" id="L373">                     &quot;50 (default 100)&quot;).build());</span>
+<span class="fc" id="L374">    }</span>
+
+    /**
+     * @param cmd
+     *
+     * @return the MonitorOption from CommandLine
+     *
+     * @throws ParseException
+     */
+    public static MonitorOption gestMonitorOption(CommandLine cmd,
+                                                  String[] args)
+        throws ParseException {
+<span class="fc" id="L386">      final String stopFilePath = cmd.getOptionValue('s');</span>
+<span class="fc" id="L387">      final String waarpConfiguration = cmd.getOptionValue('w');</span>
+      final int elapseInSecond;
+<span class="pc bpc" id="L389" title="1 of 2 branches missed.">      if (cmd.hasOption('e')) {</span>
+<span class="fc" id="L390">        final String selapse = cmd.getOptionValue('e');</span>
+        try {
+<span class="fc" id="L392">          elapseInSecond = Integer.parseInt(selapse);</span>
+<span class="pc bpc" id="L393" title="1 of 2 branches missed.">          if (elapseInSecond &lt; 1) {</span>
+<span class="nc" id="L394">            throw new NumberFormatException(&quot;Elapse time must be positive&quot;);</span>
+          }
+<span class="fc" id="L396">        } catch (NumberFormatException e) {</span>
+<span class="fc" id="L397">          throw new ParseException(&quot;Elapse time must be a positive integer&quot;);</span>
+<span class="fc" id="L398">        }</span>
+<span class="fc" id="L399">      } else {</span>
+<span class="nc" id="L400">        elapseInSecond = 10;</span>
+      }
+<span class="fc" id="L402">      int retry = OperationCheck.getRetry();</span>
+<span class="fc" id="L403">      int delay = OperationCheck.getDelay();</span>
+<span class="pc bpc" id="L404" title="1 of 2 branches missed.">      if (cmd.hasOption('r')) {</span>
+<span class="nc" id="L405">        String sretry = cmd.getOptionValue('r');</span>
+        try {
+<span class="nc" id="L407">          retry = Integer.parseInt(sretry);</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">          if (retry &lt; 1) {</span>
+<span class="nc" id="L409">            throw new NumberFormatException(&quot;Retry must be positive&quot;);</span>
+          }
+<span class="nc" id="L411">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L412">          throw new ParseException(&quot;Retry must be a positive integer&quot;);</span>
+<span class="nc" id="L413">        }</span>
+      }
+<span class="pc bpc" id="L415" title="1 of 2 branches missed.">      if (cmd.hasOption('d')) {</span>
+<span class="nc" id="L416">        String sdelay = cmd.getOptionValue('d');</span>
+        try {
+<span class="nc" id="L418">          delay = Integer.parseInt(sdelay);</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">          if (delay &lt; 50) {</span>
+<span class="nc" id="L420">            throw new NumberFormatException(&quot;Delay must be greater than 50&quot;);</span>
+          }
+<span class="nc" id="L422">        } catch (NumberFormatException e) {</span>
+<span class="nc" id="L423">          throw new ParseException(&quot;Delay must be greater than 50&quot;);</span>
+<span class="nc" id="L424">        }</span>
+      }
+<span class="fc" id="L426">      OperationCheck.setRetry(retry, delay);</span>
+<span class="fc" id="L427">      return new MonitorOption(stopFilePath, waarpConfiguration,</span>
+                               elapseInSecond);
+    }
+
+    public String getStopFilePath() {
+<span class="fc" id="L432">      return stopFilePath;</span>
+    }
+
+    public String getWaarpConfiguration() {
+<span class="fc" id="L436">      return waarpConfiguration;</span>
+    }
+
+    public int getElapseInSecond() {
+<span class="fc" id="L440">      return elapseInSecond;</span>
+    }
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

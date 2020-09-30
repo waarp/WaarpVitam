@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractVitamRequest.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.common</a> &gt; <span class="el_source">AbstractVitamRequest.java</span></div><h1>AbstractVitamRequest.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.common;
+
+import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import fr.gouv.vitam.common.StringUtils;
+import fr.gouv.vitam.common.client.VitamContext;
+import fr.gouv.vitam.common.exception.InvalidParseOperationException;
+import fr.gouv.vitam.common.model.ProcessState;
+import fr.gouv.vitam.common.model.StatusCode;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.ParametersChecker;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
+
+/**
+ * Common part for Vitam Request
+ */
+public abstract class AbstractVitamRequest {
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L44">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L45">      WaarpLoggerFactory.getLogger(AbstractVitamRequest.class);</span>
+  private static final String CHECK_MESSAGE = &quot;Check within &quot;;
+  @JsonProperty(&quot;status&quot;)
+  protected int status;
+  @JsonProperty(&quot;path&quot;)
+  private String path;
+  @JsonProperty(&quot;tenantId&quot;)
+  private int tenantId;
+  @JsonProperty(&quot;applicationSessionId&quot;)
+  private String applicationSessionId;
+  @JsonProperty(&quot;personalCertificate&quot;)
+  private String personalCertificate;
+  @JsonProperty(&quot;accessContract&quot;)
+  private String accessContract;
+  @JsonProperty(&quot;requestId&quot;)
+  private String requestId;
+  @JsonProperty(&quot;globalExecutionState&quot;)
+  private String globalExecutionState;
+  @JsonProperty(&quot;globalExecutionStatus&quot;)
+  private String globalExecutionStatus;
+  @JsonProperty(&quot;lastTryTime&quot;)
+  private long lastTryTime;
+  @JsonProperty(&quot;jsonPath&quot;)
+  private String jsonPath;
+  @JsonProperty(&quot;waarpPartner&quot;)
+  private String waarpPartner;
+  @JsonProperty(&quot;waarpRule&quot;)
+  private String waarpRule;
+  @JsonProperty(&quot;waarpId&quot;)
+  private long waarpId;
+  @JsonProperty(&quot;waarpModel&quot;)
+  private String waarpModel;
+
+<span class="fc" id="L78">  public AbstractVitamRequest() {</span>
+    // Empty constructor for Json
+<span class="fc" id="L80">  }</span>
+
+  /**
+   * Standard constructor
+   *
+   * @param taskOption
+   *
+   * @throws InvalidParseOperationException
+   */
+<span class="fc" id="L89">  public AbstractVitamRequest(final TaskOption taskOption) {</span>
+<span class="fc" id="L90">    this.path = taskOption.getPath();</span>
+<span class="fc" id="L91">    this.tenantId = taskOption.getTenantId();</span>
+<span class="fc" id="L92">    this.applicationSessionId = taskOption.getApplicationSessionId();</span>
+<span class="fc" id="L93">    this.personalCertificate = taskOption.getPersonalCertificate();</span>
+<span class="fc" id="L94">    this.accessContract = taskOption.getAccessContract();</span>
+<span class="fc" id="L95">    this.waarpPartner = taskOption.getWaarpPartner();</span>
+<span class="fc" id="L96">    this.waarpRule = taskOption.getWaarpRule();</span>
+<span class="fc" id="L97">    this.waarpModel = taskOption.getWaarpModel();</span>
+<span class="fc" id="L98">  }</span>
+
+  protected static String getCheckMessage() {
+<span class="fc" id="L101">    return CHECK_MESSAGE +</span>
+<span class="fc" id="L102">           Thread.currentThread().getStackTrace()[2].getMethodName();</span>
+  }
+
+  @JsonGetter(&quot;path&quot;)
+  public String getPath() {
+<span class="fc" id="L107">    return path;</span>
+  }
+
+  @JsonSetter(&quot;path&quot;)
+  public AbstractVitamRequest setPath(final String path) {
+    try {
+<span class="fc" id="L113">      ParametersChecker.checkParameterDefault(getCheckMessage(), path);</span>
+<span class="fc" id="L114">      StringUtils.checkSanityString(path);</span>
+<span class="nc" id="L115">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L116">      logger.error(e);</span>
+<span class="nc" id="L117">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L118">    }</span>
+<span class="fc" id="L119">    this.path = path;</span>
+<span class="fc" id="L120">    return this;</span>
+  }
+
+  @JsonGetter(&quot;tenantId&quot;)
+  public int getTenantId() {
+<span class="fc" id="L125">    return tenantId;</span>
+  }
+
+  @JsonSetter(&quot;tenantId&quot;)
+  public AbstractVitamRequest setTenantId(final int tenantId) {
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">    if (tenantId &lt; 0) {</span>
+<span class="nc" id="L131">      logger.error(&quot;TenantId is negative&quot;);</span>
+<span class="nc" id="L132">      throw new IllegalArgumentException(&quot;TenantId is negative&quot;);</span>
+    }
+<span class="fc" id="L134">    this.tenantId = tenantId;</span>
+<span class="fc" id="L135">    return this;</span>
+  }
+
+  @JsonGetter(&quot;applicationSessionId&quot;)
+  public String getApplicationSessionId() {
+<span class="fc" id="L140">    return applicationSessionId;</span>
+  }
+
+  @JsonSetter(&quot;applicationSessionId&quot;)
+  public AbstractVitamRequest setApplicationSessionId(
+      final String applicationSessionId) {
+    try {
+      ParametersChecker
+<span class="fc" id="L148">          .checkParameterDefault(getCheckMessage(), applicationSessionId);</span>
+<span class="fc" id="L149">      StringUtils.checkSanityString(applicationSessionId);</span>
+<span class="nc" id="L150">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L151">      logger.error(e);</span>
+<span class="nc" id="L152">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L153">    }</span>
+<span class="fc" id="L154">    this.applicationSessionId = applicationSessionId;</span>
+<span class="fc" id="L155">    return this;</span>
+  }
+
+  @JsonGetter(&quot;personalCertificate&quot;)
+  public String getPersonalCertificate() {
+<span class="fc" id="L160">    return personalCertificate;</span>
+  }
+
+  @JsonSetter(&quot;personalCertificate&quot;)
+  public AbstractVitamRequest setPersonalCertificate(
+      final String personalCertificate) {
+    try {
+      ParametersChecker
+<span class="fc" id="L168">          .checkParameterDefault(getCheckMessage(), personalCertificate);</span>
+<span class="fc" id="L169">      StringUtils.checkSanityString(personalCertificate);</span>
+<span class="nc" id="L170">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L171">      logger.error(e);</span>
+<span class="nc" id="L172">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L173">    }</span>
+<span class="fc" id="L174">    this.personalCertificate = personalCertificate;</span>
+<span class="fc" id="L175">    return this;</span>
+  }
+
+  @JsonGetter(&quot;accessContract&quot;)
+  public String getAccessContract() {
+<span class="fc" id="L180">    return accessContract;</span>
+  }
+
+  @JsonSetter(&quot;accessContract&quot;)
+  public AbstractVitamRequest setAccessContract(final String accessContract) {
+    try {
+      ParametersChecker
+<span class="fc" id="L187">          .checkParameterDefault(getCheckMessage(), accessContract);</span>
+<span class="fc" id="L188">      StringUtils.checkSanityString(accessContract);</span>
+<span class="nc" id="L189">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L190">      logger.error(e);</span>
+<span class="nc" id="L191">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L192">    }</span>
+<span class="fc" id="L193">    this.accessContract = accessContract;</span>
+<span class="fc" id="L194">    return this;</span>
+  }
+
+  @JsonGetter(&quot;waarpPartner&quot;)
+  public String getWaarpPartner() {
+<span class="fc" id="L199">    return waarpPartner;</span>
+  }
+
+  @JsonSetter(&quot;waarpPartner&quot;)
+  public AbstractVitamRequest setWaarpPartner(final String waarpPartner) {
+    try {
+<span class="fc" id="L205">      ParametersChecker.checkParameterDefault(getCheckMessage(), waarpPartner);</span>
+<span class="fc" id="L206">      StringUtils.checkSanityString(waarpPartner);</span>
+<span class="nc" id="L207">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L208">      logger.error(e);</span>
+<span class="nc" id="L209">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L210">    }</span>
+<span class="fc" id="L211">    this.waarpPartner = waarpPartner;</span>
+<span class="fc" id="L212">    return this;</span>
+  }
+
+  @JsonGetter(&quot;waarpRule&quot;)
+  public String getWaarpRule() {
+<span class="fc" id="L217">    return waarpRule;</span>
+  }
+
+  @JsonSetter(&quot;waarpRule&quot;)
+  public AbstractVitamRequest setWaarpRule(final String waarpRule) {
+    try {
+<span class="fc" id="L223">      ParametersChecker.checkParameterDefault(getCheckMessage(), waarpRule);</span>
+<span class="fc" id="L224">      StringUtils.checkSanityString(waarpRule);</span>
+<span class="nc" id="L225">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L226">      logger.error(e);</span>
+<span class="nc" id="L227">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L228">    }</span>
+<span class="fc" id="L229">    this.waarpRule = waarpRule;</span>
+<span class="fc" id="L230">    return this;</span>
+  }
+
+  @JsonGetter(&quot;waarpId&quot;)
+  public long getWaarpId() {
+<span class="fc" id="L235">    return waarpId;</span>
+  }
+
+  @JsonSetter(&quot;waarpId&quot;)
+  public AbstractVitamRequest setWaarpId(final long waarpId) {
+<span class="fc" id="L240">    this.waarpId = waarpId;</span>
+<span class="fc" id="L241">    return this;</span>
+  }
+
+  @JsonGetter(&quot;waarpModel&quot;)
+  public String getWaarpModel() {
+<span class="fc" id="L246">    return waarpModel;</span>
+  }
+
+  @JsonSetter(&quot;waarpModel&quot;)
+  public AbstractVitamRequest setWaarpModel(final String waarpModel) {
+<span class="nc" id="L251">    this.waarpModel = waarpModel;</span>
+<span class="nc" id="L252">    return this;</span>
+  }
+
+  @JsonGetter(&quot;requestId&quot;)
+  public String getRequestId() {
+<span class="fc" id="L257">    return requestId;</span>
+  }
+
+  @JsonSetter(&quot;requestId&quot;)
+  public AbstractVitamRequest setRequestId(final String requestId) {
+    try {
+<span class="fc" id="L263">      ParametersChecker.checkParameterDefault(getCheckMessage(), requestId);</span>
+<span class="fc" id="L264">      StringUtils.checkSanityString(requestId);</span>
+<span class="nc" id="L265">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L266">      logger.error(e);</span>
+<span class="nc" id="L267">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L268">    }</span>
+<span class="fc" id="L269">    this.requestId = requestId;</span>
+<span class="fc" id="L270">    return this;</span>
+  }
+
+  @JsonGetter(&quot;globalExecutionState&quot;)
+  public String getGlobalExecutionState() {
+<span class="fc" id="L275">    return globalExecutionState;</span>
+  }
+
+  @JsonSetter(&quot;globalExecutionState&quot;)
+  public AbstractVitamRequest setGlobalExecutionState(
+      final String globalExecutionState) {
+    try {
+      ParametersChecker
+<span class="fc" id="L283">          .checkParameterDefault(getCheckMessage(), globalExecutionState);</span>
+<span class="fc" id="L284">      StringUtils.checkSanityString(globalExecutionState);</span>
+<span class="nc" id="L285">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L286">      logger.error(e);</span>
+<span class="nc" id="L287">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L288">    }</span>
+<span class="fc" id="L289">    this.globalExecutionState = globalExecutionState;</span>
+<span class="fc" id="L290">    return this;</span>
+  }
+
+  @JsonGetter(&quot;globalExecutionStatus&quot;)
+  public String getGlobalExecutionStatus() {
+<span class="fc" id="L295">    return globalExecutionStatus;</span>
+  }
+
+  @JsonSetter(&quot;globalExecutionStatus&quot;)
+  public AbstractVitamRequest setGlobalExecutionStatus(
+      final String globalExecutionStatus) {
+    try {
+      ParametersChecker
+<span class="fc" id="L303">          .checkParameterDefault(getCheckMessage(), globalExecutionStatus);</span>
+<span class="fc" id="L304">      StringUtils.checkSanityString(globalExecutionStatus);</span>
+<span class="nc" id="L305">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L306">      logger.error(e);</span>
+<span class="nc" id="L307">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L308">    }</span>
+<span class="fc" id="L309">    this.globalExecutionStatus = globalExecutionStatus;</span>
+<span class="fc" id="L310">    return this;</span>
+  }
+
+  @JsonGetter(&quot;lastTryTime&quot;)
+  public long getLastTryTime() {
+<span class="fc" id="L315">    return lastTryTime;</span>
+  }
+
+  @JsonSetter(&quot;lastTryTime&quot;)
+  public AbstractVitamRequest setLastTryTime(final long lastTryTime) {
+<span class="fc" id="L320">    this.lastTryTime = lastTryTime;</span>
+<span class="fc" id="L321">    return this;</span>
+  }
+
+  @JsonGetter(&quot;status&quot;)
+  public int getStatus() {
+<span class="fc" id="L326">    return status;</span>
+  }
+
+  /**
+   * Set the status AND the step according to the value of the status (if
+   * less than 0, it is a step value, not a final status), but in dry mode
+   * (no check, used by Json deserialization)
+   *
+   * @param status
+   *
+   * @return this
+   */
+  @JsonSetter(&quot;status&quot;)
+  public abstract AbstractVitamRequest setStatus(final int status);
+
+  @JsonGetter(&quot;jsonPath&quot;)
+  public String getJsonPath() {
+<span class="fc" id="L343">    return jsonPath;</span>
+  }
+
+  @JsonSetter(&quot;jsonPath&quot;)
+  public AbstractVitamRequest setJsonPath(final String jsonPath) {
+    try {
+<span class="fc" id="L349">      ParametersChecker.checkParameterDefault(getCheckMessage(), jsonPath);</span>
+<span class="fc" id="L350">      StringUtils.checkSanityString(jsonPath);</span>
+<span class="nc" id="L351">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L352">      logger.error(e);</span>
+<span class="nc" id="L353">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L354">    }</span>
+<span class="fc" id="L355">    this.jsonPath = jsonPath;</span>
+<span class="fc" id="L356">    return this;</span>
+  }
+
+  /**
+   * @return the VitamContext according to this
+   */
+  @JsonIgnore
+  public VitamContext getVitamContext() {
+<span class="fc" id="L364">    return new VitamContext(tenantId)</span>
+<span class="fc" id="L365">        .setApplicationSessionId(applicationSessionId)</span>
+<span class="fc" id="L366">        .setPersonalCertificate(personalCertificate)</span>
+<span class="fc" id="L367">        .setAccessContract(accessContract);</span>
+  }
+
+  @JsonIgnore
+  public ProcessState getProcessState() {
+    try {
+      ParametersChecker
+<span class="fc" id="L374">          .checkParameterDefault(getCheckMessage(), globalExecutionState);</span>
+<span class="fc" id="L375">      StringUtils.checkSanityString(globalExecutionState);</span>
+<span class="nc" id="L376">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L377">      logger.error(e);</span>
+<span class="nc" id="L378">      return null;</span>
+<span class="fc" id="L379">    }</span>
+    try {
+<span class="fc" id="L381">      final ProcessState processState =</span>
+<span class="fc" id="L382">          ProcessState.valueOf(globalExecutionState);</span>
+<span class="pc bpc" id="L383" title="3 of 4 branches missed.">      if (processState != ProcessState.PAUSE &amp;&amp;</span>
+          processState != ProcessState.COMPLETED) {
+        // Error
+<span class="nc" id="L386">        logger.warn(&quot;Not PAUSE not COMPLETED: {}&quot;, globalExecutionState);</span>
+      }
+<span class="fc" id="L388">      return processState;</span>
+<span class="nc" id="L389">    } catch (IllegalArgumentException ignored) {</span>
+      // Error
+<span class="nc" id="L391">      logger.error(&quot;Not PAUSE: {}&quot;, globalExecutionState);</span>
+    }
+<span class="nc" id="L393">    return null;</span>
+  }
+
+  @JsonIgnore
+  public StatusCode getStatusCode() {
+    try {
+      ParametersChecker
+<span class="fc" id="L400">          .checkParameterDefault(getCheckMessage(), globalExecutionStatus);</span>
+<span class="fc" id="L401">      StringUtils.checkSanityString(globalExecutionStatus);</span>
+<span class="nc" id="L402">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L403">      logger.error(e);</span>
+<span class="nc" id="L404">      return null;</span>
+<span class="fc" id="L405">    }</span>
+    try {
+<span class="fc" id="L407">      return StatusCode.valueOf(globalExecutionStatus);</span>
+<span class="nc" id="L408">    } catch (IllegalArgumentException ignored) {</span>
+      // Error
+<span class="nc" id="L410">      logger.error(&quot;Not UNKNOWN: {}&quot;, globalExecutionStatus);</span>
+    }
+<span class="nc" id="L412">    return null;</span>
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

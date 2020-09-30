@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DipTask.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.dip</a> &gt; <span class="el_source">DipTask.java</span></div><h1>DipTask.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.dip;
+
+import fr.gouv.vitam.access.external.client.AccessExternalClient;
+import fr.gouv.vitam.common.exception.InvalidParseOperationException;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.Version;
+import org.waarp.openr66.configuration.FileBasedConfiguration;
+import org.waarp.openr66.context.task.AbstractExecJavaTask;
+import org.waarp.openr66.protocol.configuration.Configuration;
+import org.waarp.vitam.common.WaarpCommon;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
+
+import java.io.File;
+
+/**
+ * DipTask is a one shot command that will initiate one specific DIP export
+ * operation from a Waarp post task on reception.
+ */
+public class DipTask {
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L50">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L51">      WaarpLoggerFactory.getLogger(DipTask.class);</span>
+  private static File waarpConfigurationFile;
+  private static int statusMain;
+  private final TaskOption taskOption;
+  private final DipRequestFactory factory;
+  private final DipManager dipManager;
+
+  /**
+   * Unique constructor
+   *
+   * @param taskOption
+   * @param factory
+   * @param dipManager
+   */
+  public DipTask(final TaskOption taskOption, final DipRequestFactory factory,
+<span class="fc" id="L66">                 final DipManager dipManager) {</span>
+<span class="fc" id="L67">    this.taskOption = taskOption;</span>
+<span class="fc" id="L68">    this.factory = factory;</span>
+<span class="fc" id="L69">    this.dipManager = dipManager;</span>
+<span class="fc" id="L70">  }</span>
+
+  /**
+   * Will try to start the DipTask according to arguments, else print
+   * the help message
+   *
+   * @param args
+   */
+  public static void main(String[] args) {
+<span class="fc" id="L79">    Options options = getOptions();</span>
+
+<span class="fc bfc" id="L81" title="All 4 branches covered.">    if (args.length == 0 || WaarpCommon.checkHelp(args)) {</span>
+<span class="fc" id="L82">      printHelp(options);</span>
+<span class="fc" id="L83">      statusMain = 2;</span>
+<span class="fc" id="L84">      return;</span>
+    }
+    final DipTask dipTask;
+    try {
+<span class="nc" id="L88">      dipTask = getDipTask(options, args);</span>
+<span class="fc" id="L89">    } catch (ParseException e) {</span>
+<span class="fc" id="L90">      logger.error(&quot;Error while initializing &quot; + DipTask.class.getSimpleName(),</span>
+                   e);
+<span class="fc" id="L92">      printHelp(options);</span>
+<span class="fc" id="L93">      statusMain = 2;</span>
+<span class="fc" id="L94">      return;</span>
+<span class="nc" id="L95">    }</span>
+<span class="nc" id="L96">    if (!FileBasedConfiguration</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        .setSubmitClientConfigurationFromXml(Configuration.configuration,</span>
+                                             waarpConfigurationFile
+<span class="nc" id="L99">                                                 .getAbsolutePath())) {</span>
+<span class="nc" id="L100">      logger.error(&quot;Cannot load Waarp Configuration&quot;);</span>
+<span class="nc" id="L101">      statusMain = 2;</span>
+<span class="nc" id="L102">      return;</span>
+    }
+<span class="nc" id="L104">    statusMain = dipTask.invoke();</span>
+<span class="nc" id="L105">  }</span>
+
+  /**
+   * Define the options associated
+   *
+   * @return the Options
+   */
+  private static Options getOptions() {
+<span class="fc" id="L113">    Options options = new Options();</span>
+<span class="fc" id="L114">    TaskOption.setStandardTaskOptions(options);</span>
+<span class="fc" id="L115">    options.addOption(DipRequestFactory.getDirectoryOption());</span>
+<span class="fc" id="L116">    return options;</span>
+  }
+
+  /**
+   * Helper to print help
+   *
+   * @param options
+   */
+  private static void printHelp(Options options) {
+<span class="fc" id="L125">    HelpFormatter formatter = new HelpFormatter();</span>
+<span class="fc" id="L126">    formatter.printHelp(DipTask.class.getSimpleName(),</span>
+<span class="fc" id="L127">                        &quot;Version: &quot; + Version.fullIdentifier(), options,</span>
+                        WaarpCommon.FOR_MANDATORY_ARGUMENTS, true);
+<span class="fc" id="L129">  }</span>
+
+  /**
+   * Build the DipTask according to arguments
+   *
+   * @param options
+   * @param args
+   *
+   * @return the new DipTask
+   *
+   * @throws ParseException
+   */
+  private static DipTask getDipTask(Options options, String[] args)
+      throws ParseException {
+<span class="fc" id="L143">    CommandLineParser parser = new DefaultParser();</span>
+<span class="fc" id="L144">    CommandLine cmd = parser.parse(options, args);</span>
+<span class="fc" id="L145">    DipRequestFactory.parseDirectoryOption(cmd);</span>
+<span class="nc" id="L146">    TaskOption taskOption = TaskOption.getTaskOption(cmd, args);</span>
+<span class="nc" id="L147">    waarpConfigurationFile = new File(taskOption.getWaarpConfigurationFile());</span>
+<span class="nc" id="L148">    return new DipTask(taskOption, DipRequestFactory.getInstance(),</span>
+                       new DipManager());
+  }
+
+  /**
+   * Launch the DipMonitor
+   *
+   * @return 0 if OK, 1 if Warning, 2 if error
+   */
+  public int invoke() {
+<span class="fc" id="L158">    try (AccessExternalClient client = factory.getClient()) {</span>
+<span class="fc" id="L159">      DipRequest dipRequest = new DipRequest(taskOption, factory);</span>
+<span class="fc" id="L160">      return dipManager.select(factory, dipRequest, client);</span>
+<span class="nc" id="L161">    } catch (InvalidParseOperationException e) {</span>
+<span class="nc" id="L162">      logger.error(&quot;Issue since DipRequest cannot be saved&quot;, e);</span>
+    }
+<span class="nc" id="L164">    return 2;</span>
+  }
+
+  /**
+   * Equivalent JavaTask
+   */
+<span class="fc" id="L170">  public static class JavaTask extends AbstractExecJavaTask {</span>
+    @Override
+    public void run() {
+      String[] args;
+<span class="pc bpc" id="L174" title="3 of 4 branches missed.">      if (!fullarg.contains(&quot;-s &quot;) &amp;&amp; !fullarg.contains(&quot;--session &quot;)) {</span>
+        try {
+<span class="nc" id="L176">          String key = this.session.getRunner().getKey();</span>
+<span class="nc" id="L177">          args = BLANK.split(fullarg + &quot; -s &quot; + key);</span>
+<span class="nc" id="L178">        } catch (Throwable e) {</span>
+<span class="nc" id="L179">          args = BLANK.split(fullarg);</span>
+<span class="nc" id="L180">        }</span>
+      } else {
+<span class="fc" id="L182">        args = BLANK.split(fullarg);</span>
+      }
+<span class="fc" id="L184">      main(args);</span>
+<span class="fc" id="L185">      status = statusMain;</span>
+<span class="fc" id="L186">    }</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

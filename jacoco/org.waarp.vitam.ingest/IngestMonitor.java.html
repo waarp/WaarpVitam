@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IngestMonitor.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.ingest</a> &gt; <span class="el_source">IngestMonitor.java</span></div><h1>IngestMonitor.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.ingest;
+
+import fr.gouv.vitam.access.external.client.AdminExternalClient;
+import fr.gouv.vitam.access.external.client.AdminExternalClientFactory;
+import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.Version;
+import org.waarp.common.utility.WaarpShutdownHook;
+import org.waarp.openr66.configuration.FileBasedConfiguration;
+import org.waarp.openr66.protocol.configuration.Configuration;
+import org.waarp.vitam.common.WaarpCommon;
+import org.waarp.vitam.common.WaarpCommon.MonitorOption;
+import org.waarp.vitam.common.WaarpMonitor;
+import org.waarp.vitam.common.WaarpVitamShutdownHook;
+import org.waarp.vitam.common.WaarpVitamShutdownHook.WaarpVitamShutdownConfiguration;
+
+import java.io.File;
+
+/**
+ * IngestMonitor is the daemon taking care of IngestRequests through a
+ * directory containing JSON files
+ */
+public class IngestMonitor extends WaarpMonitor {
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L54">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L55">      WaarpLoggerFactory.getLogger(IngestMonitor.class);</span>
+
+  private static File waarpConfigurationFile;
+
+  private final IngestRequestFactory factory;
+  private final IngestManager ingestManager;
+
+  /**
+   * Unique constructor
+   *
+   * @param elapseTime
+   * @param stopFile
+   * @param factory
+   * @param ingestManager
+   */
+  IngestMonitor(final long elapseTime, final File stopFile,
+                final IngestRequestFactory factory,
+                final AdminExternalClientFactory adminFactory,
+                final IngestManager ingestManager) {
+<span class="fc" id="L74">    super(stopFile, adminFactory, elapseTime);</span>
+<span class="fc" id="L75">    this.factory = factory;</span>
+<span class="fc" id="L76">    this.ingestManager = ingestManager;</span>
+<span class="fc bfc" id="L77" title="All 2 branches covered.">    if (WaarpShutdownHook.shutdownHook == null) {</span>
+<span class="fc" id="L78">      new WaarpVitamShutdownHook(new WaarpVitamShutdownConfiguration(this));</span>
+<span class="fc" id="L79">      WaarpVitamShutdownHook.addShutdownHook();</span>
+    }
+<span class="fc" id="L81">  }</span>
+
+  /**
+   * Will try to start the IngestMonitor according to arguments, else print
+   * the help message
+   *
+   * @param args
+   */
+  public static void main(String[] args) {
+<span class="fc" id="L90">    Options options = getOptions();</span>
+
+<span class="fc bfc" id="L92" title="All 4 branches covered.">    if (args.length == 0 || WaarpCommon.checkHelp(args)) {</span>
+<span class="fc" id="L93">      printHelp(options);</span>
+<span class="fc" id="L94">      return;</span>
+    }
+    final IngestMonitor ingestMonitor;
+    try {
+<span class="nc" id="L98">      ingestMonitor = getIngestMonitor(options, args);</span>
+<span class="fc" id="L99">    } catch (ParseException e) {</span>
+<span class="fc" id="L100">      logger.error(&quot;Error while initializing {}&quot;, IngestMonitor.class.getName(),</span>
+                   e);
+<span class="fc" id="L102">      printHelp(options);</span>
+<span class="fc" id="L103">      return;</span>
+<span class="nc" id="L104">    }</span>
+<span class="nc" id="L105">    if (!FileBasedConfiguration</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">        .setSubmitClientConfigurationFromXml(Configuration.configuration,</span>
+                                             waarpConfigurationFile
+<span class="nc" id="L108">                                                 .getAbsolutePath())) {</span>
+<span class="nc" id="L109">      logger.error(&quot;Cannot load Waarp Configuration&quot;);</span>
+<span class="nc" id="L110">      return;</span>
+    }
+<span class="nc" id="L112">    ingestMonitor.invoke();</span>
+<span class="nc" id="L113">  }</span>
+
+  /**
+   * Define the options associated
+   *
+   * @return the Options
+   */
+  private static Options getOptions() {
+<span class="fc" id="L121">    Options options = new Options();</span>
+<span class="fc" id="L122">    MonitorOption.setStandardMonitorOptions(options);</span>
+<span class="fc" id="L123">    MonitorOption.addRetryMonitorOptions(options);</span>
+<span class="fc" id="L124">    options.addOption(IngestRequestFactory.getDirectoryOption());</span>
+<span class="fc" id="L125">    return options;</span>
+  }
+
+  /**
+   * Helper to print help
+   *
+   * @param options
+   */
+  private static void printHelp(Options options) {
+<span class="fc" id="L134">    HelpFormatter formatter = new HelpFormatter();</span>
+<span class="fc" id="L135">    formatter.printHelp(IngestMonitor.class.getSimpleName(),</span>
+<span class="fc" id="L136">                        &quot;Version: &quot; + Version.fullIdentifier(), options,</span>
+                        WaarpCommon.FOR_SIMPLE_MANDATORY_ARGUMENTS, true);
+<span class="fc" id="L138">  }</span>
+
+  /**
+   * Build the IngestMonitor according to arguments
+   *
+   * @param options
+   * @param args
+   *
+   * @return the new IngestMonitor
+   *
+   * @throws ParseException
+   */
+  private static IngestMonitor getIngestMonitor(Options options, String[] args)
+      throws ParseException {
+<span class="fc" id="L152">    CommandLineParser parser = new DefaultParser();</span>
+<span class="fc" id="L153">    CommandLine cmd = parser.parse(options, args);</span>
+<span class="fc" id="L154">    IngestRequestFactory.parseDirectoryOption(cmd);</span>
+<span class="fc" id="L155">    MonitorOption monitorOption =</span>
+<span class="nc" id="L156">        WaarpCommon.MonitorOption.gestMonitorOption(cmd, args);</span>
+<span class="nc" id="L157">    waarpConfigurationFile = new File(monitorOption.getWaarpConfiguration());</span>
+<span class="nc" id="L158">    return new IngestMonitor(monitorOption.getElapseInSecond() * 1000L,</span>
+<span class="nc" id="L159">                             new File(monitorOption.getStopFilePath()),</span>
+<span class="nc" id="L160">                             IngestRequestFactory.getInstance(),</span>
+<span class="nc" id="L161">                             AdminExternalClientFactory.getInstance(),</span>
+                             new IngestManager());
+  }
+
+  /**
+   * Launch the IngestMonitor
+   */
+  public void invoke() {
+<span class="fc" id="L169">    try (IngestExternalClient client = factory.getClient();</span>
+<span class="fc" id="L170">         AdminExternalClient adminExternalClient = getAdminFactory()</span>
+<span class="fc" id="L171">             .getClient()) {</span>
+<span class="fc" id="L172">      logger.warn(&quot;Start of {}&quot;, IngestMonitor.class.getName());</span>
+<span class="fc bfc" id="L173" title="All 2 branches covered.">      while (!isShutdown()) {</span>
+<span class="fc" id="L174">        ingestManager</span>
+<span class="fc" id="L175">            .retryAllExistingFiles(factory, client, adminExternalClient, this);</span>
+<span class="fc" id="L176">        Thread.sleep(getElapseTime());</span>
+      }
+<span class="fc" id="L178">      setShutdown(true);</span>
+<span class="fc" id="L179">      logger.warn(&quot;Stop of {}&quot;, IngestMonitor.class.getName());</span>
+<span class="nc" id="L180">    } catch (InterruptedException e) {//NOSONAR</span>
+<span class="nc" id="L181">      logger.error(&quot;{} will stop&quot;, IngestMonitor.class.getName(), e);</span>
+<span class="fc" id="L182">    }</span>
+<span class="fc" id="L183">  }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

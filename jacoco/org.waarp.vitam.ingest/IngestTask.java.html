@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IngestTask.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.ingest</a> &gt; <span class="el_source">IngestTask.java</span></div><h1>IngestTask.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.ingest;
+
+import fr.gouv.vitam.common.exception.InvalidParseOperationException;
+import fr.gouv.vitam.ingest.external.client.IngestExternalClient;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.Version;
+import org.waarp.openr66.configuration.FileBasedConfiguration;
+import org.waarp.openr66.context.task.AbstractExecJavaTask;
+import org.waarp.openr66.protocol.configuration.Configuration;
+import org.waarp.vitam.common.WaarpCommon;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
+
+import java.io.File;
+
+/**
+ * IngestTask is a one shot command that will initiate one specific Ingest
+ * operation from a Waarp post task on reception.
+ */
+public class IngestTask {
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L50">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L51">      WaarpLoggerFactory.getLogger(IngestTask.class);</span>
+  private static File waarpConfigurationFile;
+  private static int statusMain;
+  private final TaskOption taskOption;
+  private final String contextId;
+  private final String action;
+  private final boolean checkAtr;
+  private final IngestRequestFactory factory;
+  private final IngestManager ingestManager;
+
+  /**
+   * Unique constructor
+   *
+   * @param taskOption
+   * @param contextId
+   * @param action
+   * @param checkAtr
+   * @param factory
+   * @param ingestManager
+   */
+  public IngestTask(final TaskOption taskOption, final String contextId,
+                    final String action, final boolean checkAtr,
+                    final IngestRequestFactory factory,
+<span class="fc" id="L74">                    final IngestManager ingestManager) {</span>
+<span class="fc" id="L75">    this.taskOption = taskOption;</span>
+<span class="fc" id="L76">    this.contextId = contextId;</span>
+<span class="fc" id="L77">    this.action = action;</span>
+<span class="fc" id="L78">    this.checkAtr = checkAtr;</span>
+<span class="fc" id="L79">    this.factory = factory;</span>
+<span class="fc" id="L80">    this.ingestManager = ingestManager;</span>
+<span class="fc" id="L81">  }</span>
+
+  /**
+   * Will try to start the IngestTask according to arguments, else print
+   * the help message
+   *
+   * @param args
+   */
+  public static void main(String[] args) {
+<span class="fc" id="L90">    Options options = getOptions();</span>
+
+<span class="fc bfc" id="L92" title="All 4 branches covered.">    if (args.length == 0 || WaarpCommon.checkHelp(args)) {</span>
+<span class="fc" id="L93">      printHelp(options);</span>
+<span class="fc" id="L94">      statusMain = 2;</span>
+<span class="fc" id="L95">      return;</span>
+    }
+    final IngestTask ingestTask;
+    try {
+<span class="nc" id="L99">      ingestTask = getIngestTask(options, args);</span>
+<span class="fc" id="L100">    } catch (ParseException e) {</span>
+<span class="fc" id="L101">      logger</span>
+<span class="fc" id="L102">          .error(&quot;Error while initializing &quot; + IngestTask.class.getSimpleName(),</span>
+                 e);
+<span class="fc" id="L104">      printHelp(options);</span>
+<span class="fc" id="L105">      statusMain = 2;</span>
+<span class="fc" id="L106">      return;</span>
+<span class="nc" id="L107">    }</span>
+<span class="nc" id="L108">    if (!FileBasedConfiguration</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">        .setSubmitClientConfigurationFromXml(Configuration.configuration,</span>
+                                             waarpConfigurationFile
+<span class="nc" id="L111">                                                 .getAbsolutePath())) {</span>
+<span class="nc" id="L112">      logger.error(&quot;Cannot load Waarp Configuration&quot;);</span>
+<span class="nc" id="L113">      statusMain = 2;</span>
+<span class="nc" id="L114">      return;</span>
+    }
+<span class="nc" id="L116">    statusMain = ingestTask.invoke();</span>
+<span class="nc" id="L117">  }</span>
+
+  /**
+   * Define the options associated
+   *
+   * @return the Options
+   */
+  private static Options getOptions() {
+<span class="fc" id="L125">    Options options = new Options();</span>
+<span class="fc" id="L126">    TaskOption.setStandardTaskOptions(options);</span>
+<span class="fc" id="L127">    options.addOption(&quot;x&quot;, &quot;context&quot;, true, &quot;Context Id, shall be one&quot; +</span>
+                                            &quot; of DEFAULT_WORKFLOW (default), &quot; +
+                                            &quot;HOLDING_SCHEME, FILING_SCHEME&quot;)
+<span class="fc" id="L130">           .addOption(&quot;k&quot;, &quot;checkatr&quot;, false, &quot;If set, after RequestId sent, &quot; +</span>
+                                              &quot;will check for ATR if first step is ok&quot;)
+<span class="fc" id="L132">           .addOption(&quot;n&quot;, &quot;action&quot;, true, &quot;Action, shall be always RESUME&quot;);</span>
+<span class="fc" id="L133">    options.addOption(IngestRequestFactory.getDirectoryOption());</span>
+<span class="fc" id="L134">    return options;</span>
+  }
+
+  /**
+   * Helper to print help
+   *
+   * @param options
+   */
+  private static void printHelp(Options options) {
+<span class="fc" id="L143">    HelpFormatter formatter = new HelpFormatter();</span>
+<span class="fc" id="L144">    formatter.printHelp(IngestTask.class.getSimpleName(),</span>
+<span class="fc" id="L145">                        &quot;Version: &quot; + Version.fullIdentifier(), options,</span>
+                        WaarpCommon.FOR_MANDATORY_ARGUMENTS, true);
+<span class="fc" id="L147">  }</span>
+
+  /**
+   * Build the IngestTask according to arguments
+   *
+   * @param options
+   * @param args
+   *
+   * @return the new IngestTask
+   *
+   * @throws ParseException
+   */
+  private static IngestTask getIngestTask(Options options, String[] args)
+      throws ParseException {
+<span class="fc" id="L161">    CommandLineParser parser = new DefaultParser();</span>
+<span class="fc" id="L162">    CommandLine cmd = parser.parse(options, args);</span>
+<span class="fc" id="L163">    IngestRequestFactory.parseDirectoryOption(cmd);</span>
+<span class="fc" id="L164">    final String contextId = cmd.getOptionValue('x', &quot;DEFAULT_WORKFLOW&quot;);</span>
+<span class="pc bpc" id="L165" title="1 of 2 branches missed.">    if (!IngestRequest.CONTEXT.checkCorrectness(contextId)) {</span>
+<span class="nc" id="L166">      throw new ParseException(</span>
+          &quot;Context should be one of DEFAULT_WORKFLOW (Sip ingest), &quot; +
+          &quot;HOLDING_SCHEME (tree) or FILING_SCHEME&quot;);
+    }
+<span class="fc" id="L170">    final String action = cmd.getOptionValue('n', IngestRequest.RESUME);</span>
+<span class="nc" id="L171">    TaskOption taskOption = TaskOption.getTaskOption(cmd, args);</span>
+<span class="nc" id="L172">    waarpConfigurationFile = new File(taskOption.getWaarpConfigurationFile());</span>
+<span class="nc" id="L173">    return new IngestTask(taskOption, contextId, action, cmd.hasOption('k'),</span>
+<span class="nc" id="L174">                          IngestRequestFactory.getInstance(),</span>
+                          new IngestManager());
+  }
+
+  /**
+   * Launch the IngestMonitor
+   *
+   * @return 0 if OK, 1 if Warning, 2 if error
+   */
+  public int invoke() {
+<span class="fc" id="L184">    try (IngestExternalClient client = factory.getClient()) {</span>
+<span class="fc" id="L185">      IngestRequest ingestRequest =</span>
+          new IngestRequest(taskOption, contextId, action, checkAtr, factory);
+<span class="fc" id="L187">      return ingestManager.ingestLocally(factory, ingestRequest, client);</span>
+<span class="nc" id="L188">    } catch (InvalidParseOperationException e) {</span>
+<span class="nc" id="L189">      logger.error(&quot;Issue since IngestRequest cannot be saved&quot;, e);</span>
+    }
+<span class="nc" id="L191">    return 2;</span>
+  }
+
+  /**
+   * Equivalent JavaTask
+   */
+<span class="fc" id="L197">  public static class JavaTask extends AbstractExecJavaTask {</span>
+    @Override
+    public void run() {
+      String[] args;
+<span class="pc bpc" id="L201" title="2 of 4 branches missed.">      if (!fullarg.contains(&quot;-s &quot;) &amp;&amp; !fullarg.contains(&quot;--session &quot;)) {</span>
+        try {
+<span class="nc" id="L203">          String key = this.session.getRunner().getKey();</span>
+<span class="nc" id="L204">          args = BLANK.split(fullarg + &quot; -s &quot; + key);</span>
+<span class="fc" id="L205">        } catch (Throwable e) {</span>
+<span class="fc" id="L206">          args = BLANK.split(fullarg);</span>
+<span class="pc" id="L207">        }</span>
+      } else {
+<span class="nc" id="L209">        args = BLANK.split(fullarg);</span>
+      }
+<span class="fc" id="L211">      main(args);</span>
+<span class="fc" id="L212">      status = statusMain;</span>
+<span class="fc" id="L213">    }</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

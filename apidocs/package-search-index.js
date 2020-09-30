@@ -1,0 +1,1 @@
+packageSearchIndex = [{"l":"All Packages","url":"allpackages-index.html"},{"l":"org.waarp.vitam"},{"l":"org.waarp.vitam.common"},{"l":"org.waarp.vitam.common.waarp"},{"l":"org.waarp.vitam.dip"},{"l":"org.waarp.vitam.ingest"}]

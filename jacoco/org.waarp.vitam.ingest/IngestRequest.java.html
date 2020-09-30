@@ -1,0 +1,446 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IngestRequest.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.ingest</a> &gt; <span class="el_source">IngestRequest.java</span></div><h1>IngestRequest.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.ingest;
+
+import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import fr.gouv.vitam.common.GlobalDataRest;
+import fr.gouv.vitam.common.StringUtils;
+import fr.gouv.vitam.common.exception.InvalidParseOperationException;
+import fr.gouv.vitam.common.json.JsonHandler;
+import fr.gouv.vitam.common.model.LocalFile;
+import fr.gouv.vitam.common.model.RequestResponseOK;
+import org.waarp.common.exception.IllegalFiniteStateException;
+import org.waarp.common.exception.InvalidArgumentException;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.state.MachineState;
+import org.waarp.common.state.Transition;
+import org.waarp.common.utility.ParametersChecker;
+import org.waarp.vitam.common.AbstractVitamRequest;
+import org.waarp.vitam.common.WaarpCommon.TaskOption;
+
+import java.io.File;
+import java.util.EnumSet;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * IngestRequest is the unitary entry for Ingest operations made by Waarp to
+ * Vitam
+ */
+public class IngestRequest extends AbstractVitamRequest {
+  /**
+   * Only kind of action supported by Vitam and Waarp
+   */
+  static final String RESUME = &quot;RESUME&quot;;
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L59">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L60">      WaarpLoggerFactory.getLogger(IngestRequest.class);</span>
+<span class="fc" id="L61">  @JsonIgnore</span>
+<span class="fc" id="L62">  MachineState&lt;IngestStep&gt; step = IngestStep.newSessionMachineState();</span>
+  /*
+   contextId – a type of ingest among &quot;DEFAULT_WORKFLOW&quot; (Sip ingest),
+   &quot;HOLDING_SCHEME&quot; (tree) &quot;FILING_SCHEME&quot; (plan)
+   */
+  @JsonProperty(&quot;contextId&quot;)
+  private String contextId;
+<span class="fc" id="L69">  @JsonProperty(&quot;action&quot;)</span>
+  private String action = RESUME;
+  @JsonProperty(&quot;checkAtr&quot;)
+  private boolean checkAtr;
+
+<span class="fc" id="L74">  public IngestRequest() {</span>
+    // Empty constructor for Json
+<span class="fc" id="L76">  }</span>
+
+  /**
+   * Standard constructor
+   *
+   * @param taskOption
+   * @param contextId
+   * @param action
+   * @param checkAtr
+   * @param factory
+   *
+   * @throws InvalidParseOperationException
+   */
+  public IngestRequest(final TaskOption taskOption, final String contextId,
+                       final String action, final boolean checkAtr,
+                       final IngestRequestFactory factory)
+      throws InvalidParseOperationException {
+<span class="fc" id="L93">    super(taskOption);</span>
+    try {
+      ParametersChecker
+<span class="fc" id="L96">          .checkParameterDefault(getCheckMessage(), contextId, action);</span>
+<span class="fc" id="L97">      ParametersChecker.checkSanityString(contextId, action);</span>
+<span class="nc" id="L98">    } catch (IllegalArgumentException | InvalidArgumentException e) {</span>
+<span class="nc" id="L99">      logger.error(e);</span>
+<span class="nc" id="L100">      throw new InvalidParseOperationException(e);</span>
+<span class="fc" id="L101">    }</span>
+<span class="fc" id="L102">    this.contextId = contextId;</span>
+<span class="fc" id="L103">    this.action = action;</span>
+<span class="fc" id="L104">    this.checkAtr = checkAtr;</span>
+<span class="fc" id="L105">    this.status = this.step.getCurrent().getStatusMonitor();</span>
+    try {
+<span class="fc" id="L107">      factory.saveNewIngestRequest(this);</span>
+<span class="nc" id="L108">    } catch (InvalidParseOperationException e) {</span>
+<span class="nc" id="L109">      logger.error(&quot;Will not be able to save: {}&quot;, this, e);</span>
+<span class="nc" id="L110">      throw e;</span>
+<span class="fc" id="L111">    }</span>
+<span class="fc" id="L112">  }</span>
+
+  @Override
+  public String toString() {
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">    return &quot;Ingest = Step: &quot; + (step != null? step.getCurrent() : &quot;noStep&quot;) +</span>
+<span class="fc" id="L117">           &quot; &quot; + JsonHandler.unprettyPrint(this);</span>
+  }
+
+  @JsonGetter(&quot;contextId&quot;)
+  public String getContextId() {
+<span class="fc" id="L122">    return contextId;</span>
+  }
+
+  /**
+   * @param contextId a type of ingest among &quot;DEFAULT_WORKFLOW&quot; (Sip ingest),
+   *     &quot;HOLDING_SCHEME&quot; (tree) &quot;FILING_SCHEME&quot; (plan)
+   *
+   * @return this
+   */
+  @JsonSetter(&quot;contextId&quot;)
+  public IngestRequest setContextId(final String contextId) {
+    try {
+<span class="fc" id="L134">      ParametersChecker.checkParameterDefault(getCheckMessage(), contextId);</span>
+<span class="fc" id="L135">      StringUtils.checkSanityString(contextId);</span>
+<span class="nc" id="L136">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L137">      logger.error(e);</span>
+<span class="nc" id="L138">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L139">    }</span>
+<span class="fc" id="L140">    this.contextId = contextId;</span>
+<span class="fc" id="L141">    return this;</span>
+  }
+
+  @JsonGetter(&quot;action&quot;)
+  public String getAction() {
+<span class="fc" id="L146">    return action;</span>
+  }
+
+  /**
+   * @param action shall be &quot;RESUME&quot; only
+   *
+   * @return this
+   */
+  @JsonSetter(&quot;action&quot;)
+  public IngestRequest setAction(final String action) {
+    try {
+<span class="fc" id="L157">      ParametersChecker.checkParameterDefault(getCheckMessage(), action);</span>
+<span class="fc" id="L158">      StringUtils.checkSanityString(action);</span>
+<span class="nc" id="L159">    } catch (InvalidParseOperationException | IllegalArgumentException e) {</span>
+<span class="nc" id="L160">      logger.error(e);</span>
+<span class="nc" id="L161">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L162">    }</span>
+<span class="fc" id="L163">    this.action = action;</span>
+<span class="fc" id="L164">    return this;</span>
+  }
+
+  /**
+   * Use to set the step and status accordingly.
+   *
+   * @param step
+   * @param status
+   * @param factory
+   *
+   * @return this
+   *
+   * @throws InvalidParseOperationException
+   */
+  @JsonIgnore
+  public IngestRequest setStep(final IngestStep step, final int status,
+                               IngestRequestFactory factory)
+      throws InvalidParseOperationException {
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">    if (this.step == null) {</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">      if (!step.equals(IngestStep.END)) {</span>
+<span class="nc" id="L184">        logger.debug(&quot;Step {} could not be set since IngestRequest done&quot;, step);</span>
+      }
+      // Nothing to do since already done
+<span class="nc" id="L187">      return this;</span>
+    }
+<span class="fc bfc" id="L189" title="All 4 branches covered.">    if (!step.equals(IngestStep.ERROR) &amp;&amp; this.step.getCurrent().equals(step)) {</span>
+      // nothing to do
+<span class="fc" id="L191">      return this;</span>
+    }
+    try {
+<span class="fc" id="L194">      this.step.setCurrent(step);</span>
+<span class="nc" id="L195">    } catch (IllegalFiniteStateException e) {</span>
+<span class="nc" id="L196">      logger.error(e);</span>
+<span class="nc" id="L197">      this.step.setDryCurrent(step);</span>
+<span class="fc" id="L198">    }</span>
+<span class="fc bfc" id="L199" title="All 2 branches covered.">    setStatus(step != IngestStep.ERROR? step.getStatusMonitor() : status)</span>
+<span class="fc" id="L200">        .setLastTryTime(System.currentTimeMillis());</span>
+<span class="fc" id="L201">    return save(factory);</span>
+  }
+
+  /**
+   * Set the status AND the step according to the value of the status (if
+   * less than 0, it is a step value, not a final status), but in dry mode
+   * (no check, used by Json deserialization)
+   *
+   * @param status
+   *
+   * @return this
+   */
+  @JsonSetter(&quot;status&quot;)
+  public IngestRequest setStatus(final int status) {
+<span class="fc" id="L215">    this.status = status;</span>
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">    if (step != null) {</span>
+<span class="fc" id="L217">      step.setDryCurrent(IngestStep.getFromInt(status));</span>
+    }
+<span class="fc" id="L219">    return this;</span>
+  }
+
+  /**
+   * Save this IngestRequest
+   *
+   * @param factory
+   *
+   * @return this
+   *
+   * @throws InvalidParseOperationException
+   */
+  @JsonIgnore
+  public IngestRequest save(IngestRequestFactory factory)
+      throws InvalidParseOperationException {
+<span class="fc" id="L234">    factory.saveIngestRequest(this);</span>
+<span class="fc" id="L235">    return this;</span>
+  }
+
+  @JsonIgnore
+  public IngestStep getStep() {
+<span class="pc bpc" id="L240" title="1 of 2 branches missed.">    if (step == null) {</span>
+<span class="nc" id="L241">      return null;</span>
+    }
+<span class="fc" id="L243">    return step.getCurrent();</span>
+  }
+
+  @JsonGetter(&quot;checkAtr&quot;)
+  public boolean isCheckAtr() {
+<span class="fc" id="L248">    return checkAtr;</span>
+  }
+
+  @JsonSetter(&quot;checkAtr&quot;)
+  public IngestRequest setCheckAtr(final boolean checkAtr) {
+<span class="fc" id="L253">    this.checkAtr = checkAtr;</span>
+<span class="fc" id="L254">    return this;</span>
+  }
+
+  /**
+   * Set extra information from first response from operation submission
+   *
+   * @param requestResponse
+   *
+   * @return this
+   */
+  @JsonIgnore
+  public IngestRequest setFromRequestResponse(
+      RequestResponseOK requestResponse) {
+<span class="fc" id="L267">    String requestIdNew =</span>
+<span class="fc" id="L268">        requestResponse.getHeaderString(GlobalDataRest.X_REQUEST_ID);</span>
+<span class="fc" id="L269">    String globalExecutionStateNew = requestResponse</span>
+<span class="fc" id="L270">        .getHeaderString(GlobalDataRest.X_GLOBAL_EXECUTION_STATE);</span>
+<span class="fc" id="L271">    String globalExecutionStatusNew = requestResponse</span>
+<span class="fc" id="L272">        .getHeaderString(GlobalDataRest.X_GLOBAL_EXECUTION_STATUS);</span>
+    try {
+<span class="fc" id="L274">      ParametersChecker.checkParameterDefault(getCheckMessage(), requestIdNew,</span>
+                                              globalExecutionStateNew,
+                                              globalExecutionStatusNew);
+<span class="fc" id="L277">      ParametersChecker.checkSanityString(requestIdNew, globalExecutionStateNew,</span>
+                                          globalExecutionStatusNew);
+<span class="nc" id="L279">    } catch (IllegalArgumentException | InvalidArgumentException e) {</span>
+<span class="nc" id="L280">      logger.error(e);</span>
+<span class="nc" id="L281">      throw new IllegalArgumentException(e.getMessage(), e);</span>
+<span class="fc" id="L282">    }</span>
+<span class="fc" id="L283">    setGlobalExecutionState(globalExecutionStateNew)</span>
+<span class="fc" id="L284">        .setGlobalExecutionStatus(globalExecutionStatusNew)</span>
+<span class="fc" id="L285">        .setRequestId(requestIdNew);</span>
+<span class="fc" id="L286">    return this;</span>
+  }
+
+  /**
+   * @return the LocalFile according to this
+   */
+  @JsonIgnore
+  public LocalFile getLocalFile() {
+<span class="fc" id="L294">    return new LocalFile(getPath());</span>
+  }
+
+  /**
+   * @return the ATR File pointer according to this
+   */
+  @JsonIgnore
+  public File getAtrFile(IngestRequestFactory factory) {
+<span class="fc" id="L302">    return factory.getXmlAtrFile(this);</span>
+  }
+
+  /**
+   * Context accepted by Vitam
+   */
+<span class="fc" id="L308">  enum CONTEXT {</span>
+    /**
+     * Sip ingest
+     */
+<span class="fc" id="L312">    DEFAULT_WORKFLOW,</span>
+    /**
+     * Tree
+     */
+<span class="fc" id="L316">    HOLDING_SCHEME,</span>
+    /**
+     * Plan
+     */
+<span class="fc" id="L320">    FILING_SCHEME;</span>
+
+    public static boolean checkCorrectness(String arg) {
+      try {
+<span class="fc" id="L324">        CONTEXT.valueOf(arg);</span>
+<span class="fc" id="L325">        return true;</span>
+<span class="nc" id="L326">      } catch (IllegalArgumentException ignore) {</span>
+<span class="nc" id="L327">        return false;</span>
+      }
+    }
+  }
+
+  /**
+   * Different steps of Ingest from Waarp point of view
+   */
+<span class="fc" id="L335">  enum IngestStep {</span>
+    /**
+     * IngestRequest not started yet
+     */
+<span class="fc" id="L339">    STARTUP(-1),</span>
+    /**
+     * IngestRequest INGEST to retry
+     */
+<span class="fc" id="L343">    RETRY_INGEST(-2),</span>
+    /**
+     * IngestRequest INGEST Id to retry
+     */
+<span class="fc" id="L347">    RETRY_INGEST_ID(-3),</span>
+    /**
+     * IngestRequest ATR to get
+     */
+<span class="fc" id="L351">    RETRY_ATR(-4),</span>
+    /**
+     * IngestRequest ATR to forward
+     */
+<span class="fc" id="L355">    RETRY_ATR_FORWARD(-5),</span>
+    /**
+     * IngestRequest Error
+     */
+<span class="fc" id="L359">    ERROR(-7),</span>
+    /**
+     * Final End step
+     */
+<span class="fc" id="L363">    END(-10);</span>
+
+    private static final ConcurrentHashMap&lt;IngestStep, EnumSet&lt;IngestStep&gt;&gt;
+<span class="fc" id="L366">        stateMap = new ConcurrentHashMap&lt;&gt;();</span>
+
+    static {
+<span class="fc" id="L369">      initR66FiniteStates();</span>
+<span class="fc" id="L370">    }</span>
+
+    private final int statusMonitor;
+
+<span class="fc" id="L374">    IngestStep(int status) {</span>
+<span class="fc" id="L375">      this.statusMonitor = status;</span>
+<span class="fc" id="L376">    }</span>
+
+    /**
+     * This method should be called once at startup to initialize the Finite
+     * States association.
+     */
+    private static void initR66FiniteStates() {
+<span class="fc bfc" id="L383" title="All 2 branches covered.">      for (final IngestTransition trans : IngestTransition.values()) {</span>
+<span class="fc" id="L384">        stateMap.put(trans.elt.getState(), trans.elt.getSet());</span>
+      }
+<span class="fc" id="L386">    }</span>
+
+    /**
+     * @return a new Session MachineState for OpenR66
+     */
+    private static MachineState&lt;IngestStep&gt; newSessionMachineState() {
+<span class="fc" id="L392">      return new MachineState&lt;&gt;(STARTUP, stateMap);</span>
+    }
+
+    /**
+     * @param machine the Session MachineState to release
+     */
+    static void endSessionMachineSate(MachineState&lt;IngestStep&gt; machine) {
+<span class="pc bpc" id="L399" title="1 of 2 branches missed.">      if (machine != null) {</span>
+<span class="fc" id="L400">        machine.release();</span>
+      }
+<span class="fc" id="L402">    }</span>
+
+    static IngestStep getFromInt(int status) {
+<span class="fc bfc" id="L405" title="All 7 branches covered.">      switch (status) {</span>
+        case -1:
+<span class="fc" id="L407">          return STARTUP;</span>
+        case -2:
+<span class="fc" id="L409">          return RETRY_INGEST;</span>
+        case -3:
+<span class="fc" id="L411">          return RETRY_INGEST_ID;</span>
+        case -4:
+<span class="fc" id="L413">          return RETRY_ATR;</span>
+        case -5:
+<span class="fc" id="L415">          return RETRY_ATR_FORWARD;</span>
+        case -10:
+<span class="fc" id="L417">          return END;</span>
+        case -7:
+        default:
+<span class="fc" id="L420">          return ERROR;</span>
+      }
+    }
+
+    int getStatusMonitor() {
+<span class="fc" id="L425">      return statusMonitor;</span>
+    }
+
+<span class="fc" id="L428">    private enum IngestTransition {</span>
+<span class="fc" id="L429">      T_STARTUP(STARTUP, EnumSet.of(RETRY_INGEST, ERROR)),</span>
+<span class="fc" id="L430">      T_RETRY_INGEST(RETRY_INGEST, EnumSet.of(RETRY_INGEST_ID, ERROR)),</span>
+<span class="fc" id="L431">      T_RETRY_INGEST_ID(RETRY_INGEST_ID, EnumSet.of(RETRY_ATR, ERROR, END)),</span>
+<span class="fc" id="L432">      T_RETRY_ATR(RETRY_ATR, EnumSet.of(RETRY_ATR_FORWARD, ERROR)),</span>
+<span class="fc" id="L433">      T_RETRY_ATR_FORWARD(RETRY_ATR_FORWARD, EnumSet.of(ERROR, END)),</span>
+<span class="fc" id="L434">      T_ERROR(ERROR, EnumSet.of(ERROR, END)), T_END(END, EnumSet.of(END));</span>
+
+      private final Transition&lt;IngestStep&gt; elt;
+
+<span class="fc" id="L438">      IngestTransition(IngestStep state, EnumSet&lt;IngestStep&gt; set) {</span>
+<span class="fc" id="L439">        elt = new Transition&lt;&gt;(state, set);</span>
+<span class="fc" id="L440">      }</span>
+
+    }
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

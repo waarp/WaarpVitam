@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DipManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Waarp Vitam Module</a> &gt; <a href="index.source.html" class="el_package">org.waarp.vitam.dip</a> &gt; <span class="el_source">DipManager.java</span></div><h1>DipManager.java</h1><pre class="source lang-java linenums">/*
+ * This file is part of Waarp Project (named also Waarp or GG).
+ *
+ *  Copyright (c) 2019, Waarp SAS, and individual contributors by the @author
+ *  tags. See the COPYRIGHT.txt in the distribution for a full listing of
+ * individual contributors.
+ *
+ *  All Waarp Project is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Waarp is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with
+ * Waarp . If not, see &lt;http://www.gnu.org/licenses/&gt;.
+ */
+
+package org.waarp.vitam.dip;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import fr.gouv.vitam.access.external.client.AccessExternalClient;
+import fr.gouv.vitam.access.external.client.AdminExternalClient;
+import fr.gouv.vitam.common.GlobalDataRest;
+import fr.gouv.vitam.common.client.VitamContext;
+import fr.gouv.vitam.common.error.VitamError;
+import fr.gouv.vitam.common.exception.InvalidParseOperationException;
+import fr.gouv.vitam.common.exception.VitamClientException;
+import fr.gouv.vitam.common.model.RequestResponse;
+import fr.gouv.vitam.common.model.RequestResponseOK;
+import fr.gouv.vitam.common.stream.StreamUtils;
+import org.apache.commons.io.FileUtils;
+import org.waarp.common.logging.SysErrLogger;
+import org.waarp.common.logging.WaarpLogger;
+import org.waarp.common.logging.WaarpLoggerFactory;
+import org.waarp.common.utility.WaarpThreadFactory;
+import org.waarp.vitam.common.OperationCheck;
+import org.waarp.vitam.dip.DipRequest.DIPStep;
+
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import static java.nio.file.StandardCopyOption.*;
+
+/**
+ * DipManager is the central logic for DIP management between Waarp and
+ * Vitam
+ */
+public class DipManager implements Runnable {
+  /**
+   * Prefix of File Information for DIP_FAILED
+   */
+  public static final String DIP_FAILED = &quot;DIP_FAILED&quot;;
+  /**
+   * Prefix of File Information for DIP
+   */
+  public static final String DIP = &quot;DIP&quot;;
+  protected static final String ERROR_MESSAGE = &quot;{}\n\t{}&quot;;
+  /**
+   * Internal Logger
+   */
+<span class="fc" id="L74">  private static final WaarpLogger logger =</span>
+<span class="fc" id="L75">      WaarpLoggerFactory.getLogger(DipManager.class);</span>
+  private static final String ISSUE_SINCE_SELECT_PRODUCES_AN_ERROR =
+      &quot;Issue since Select produces an error&quot;;
+
+  private DipRequest dipRequest;
+  private AdminExternalClient adminExternalClient;
+  private AccessExternalClient client;
+  private DipRequestFactory dipRequestFactory;
+
+<span class="fc" id="L84">  DipManager() {</span>
+    // Empty
+<span class="fc" id="L86">  }</span>
+
+  private DipManager(final DipRequest dipRequest,
+                     final AdminExternalClient adminExternalClient,
+                     final AccessExternalClient client,
+<span class="fc" id="L91">                     final DipRequestFactory dipRequestFactory) {</span>
+<span class="fc" id="L92">    this.dipRequest = dipRequest;</span>
+<span class="fc" id="L93">    this.adminExternalClient = adminExternalClient;</span>
+<span class="fc" id="L94">    this.client = client;</span>
+<span class="fc" id="L95">    this.dipRequestFactory = dipRequestFactory;</span>
+<span class="fc" id="L96">  }</span>
+
+  /**
+   * Get all existing DipRequest and try to continue according to their
+   * status
+   *
+   * @param dipRequestFactory
+   * @param client
+   * @param adminExternalClient
+   * @param dipMonitor
+   */
+  void retryAllExistingFiles(final DipRequestFactory dipRequestFactory,
+                             final AccessExternalClient client,
+                             final AdminExternalClient adminExternalClient,
+                             final DipMonitor dipMonitor) {
+<span class="fc" id="L111">    List&lt;DipRequest&gt; dipRequests = dipRequestFactory.getExistingDips();</span>
+<span class="fc bfc" id="L112" title="All 2 branches covered.">    if (dipRequests.isEmpty()) {</span>
+<span class="fc" id="L113">      return;</span>
+    }
+<span class="fc" id="L115">    ExecutorService executorService = Executors</span>
+<span class="fc" id="L116">        .newFixedThreadPool(dipRequests.size(),</span>
+                            new WaarpThreadFactory(&quot;DipManager&quot;));
+<span class="fc bfc" id="L118" title="All 2 branches covered.">    for (DipRequest dipRequest : dipRequests) {</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">      if (dipMonitor.isShutdown()) {</span>
+<span class="nc" id="L120">        return;</span>
+      }
+<span class="fc" id="L122">      DipManager task = new DipManager(dipRequest, adminExternalClient, client,</span>
+                                       dipRequestFactory);
+<span class="fc" id="L124">      executorService.execute(task);</span>
+<span class="fc" id="L125">    }</span>
+    try {
+<span class="fc" id="L127">      Thread.sleep(dipMonitor.getElapseTime());</span>
+<span class="nc" id="L128">    } catch (InterruptedException e) {//NOSONAR</span>
+<span class="nc" id="L129">      SysErrLogger.FAKE_LOGGER.ignoreLog(e);</span>
+<span class="fc" id="L130">    }</span>
+<span class="fc" id="L131">    executorService.shutdown();</span>
+<span class="fc bfc" id="L132" title="All 2 branches covered.">    while (!executorService.isTerminated()) {</span>
+      try {
+<span class="fc" id="L134">        executorService.awaitTermination(dipMonitor.getElapseTime(),</span>
+                                         TimeUnit.MILLISECONDS);
+<span class="nc" id="L136">      } catch (InterruptedException e) {//NOSONAR</span>
+<span class="nc" id="L137">        SysErrLogger.FAKE_LOGGER.ignoreLog(e);</span>
+<span class="pc" id="L138">      }</span>
+    }
+<span class="fc" id="L140">    executorService.shutdownNow();</span>
+<span class="fc" id="L141">  }</span>
+
+  @Override
+  public void run() {
+<span class="fc" id="L145">    logger.warn(&quot;Will run {}&quot;, dipRequest);</span>
+    try {
+<span class="fc bfc" id="L147" title="All 2 branches covered.">      while (runStep(dipRequestFactory, client, adminExternalClient,</span>
+                     dipRequest)) {
+        // Executing next step
+<span class="fc bfc" id="L150" title="All 2 branches covered.">        if (dipRequest.getStep() == null) {</span>
+          // END
+<span class="fc" id="L152">          break;</span>
+        }
+<span class="fc" id="L154">        logger.debug(&quot;Will rerun {}&quot;, dipRequest);</span>
+      }
+<span class="nc" id="L156">    } catch (InvalidParseOperationException e) {</span>
+      // very bad
+<span class="nc" id="L158">      logger.error(&quot;Very bad since cannot save DipRequest&quot;, e);</span>
+<span class="fc" id="L159">    }</span>
+<span class="fc" id="L160">  }</span>
+
+  /**
+   * Rune next step for this DipRequest
+   *
+   * @param dipRequestFactory
+   * @param client
+   * @param adminExternalClient
+   * @param dipRequest
+   *
+   * @return true if it is possible to run again the next step for this
+   *     DipRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private boolean runStep(final DipRequestFactory dipRequestFactory,
+                          final AccessExternalClient client,
+                          final AdminExternalClient adminExternalClient,
+                          final DipRequest dipRequest)
+      throws InvalidParseOperationException {
+<span class="fc" id="L180">    DIPStep step = dipRequest.getStep();</span>
+<span class="fc" id="L181">    logger.debug(&quot;Step is {} from {}&quot;, step, dipRequest);</span>
+<span class="pc bpc" id="L182" title="2 of 7 branches missed.">    switch (step) {</span>
+      case STARTUP:
+        // Ignore: request not ready for the manager
+<span class="fc" id="L185">        break;</span>
+      case RETRY_SELECT:
+        // restart from Select
+<span class="fc" id="L188">        logger.info(&quot;Start from Select: {}&quot;, dipRequest);</span>
+<span class="fc" id="L189">        select(dipRequestFactory, dipRequest, client);</span>
+<span class="fc" id="L190">        break;</span>
+      case RETRY_DIP:
+        // restart from DIP
+<span class="fc" id="L193">        logger.info(&quot;From DIP: {}&quot;, dipRequest);</span>
+<span class="fc" id="L194">        getDip(dipRequestFactory, dipRequest, client, adminExternalClient,</span>
+<span class="fc" id="L195">               dipRequest.getVitamContext());</span>
+<span class="fc" id="L196">        break;</span>
+      case RETRY_DIP_FORWARD:
+        // Write back the content of the DIP through Waarp
+<span class="fc" id="L199">        logger.info(&quot;From DIP_FORWARD: {}&quot;, dipRequest);</span>
+<span class="fc" id="L200">        File targetFile = dipRequest.getDipFile(dipRequestFactory);</span>
+<span class="fc" id="L201">        sendDipFile(dipRequestFactory, dipRequest, targetFile);</span>
+<span class="fc" id="L202">        break;</span>
+      case ERROR:
+<span class="fc" id="L204">        logger.info(&quot;From Error: {}&quot;, dipRequest);</span>
+<span class="fc" id="L205">        sendErrorBack(dipRequestFactory, dipRequest);</span>
+<span class="fc" id="L206">        break;</span>
+      case END:
+        // To be deleted
+<span class="nc" id="L209">        logger.info(&quot;End of DIP: {}&quot;, dipRequest);</span>
+<span class="nc" id="L210">        toDelete(dipRequestFactory, dipRequest);</span>
+<span class="nc" id="L211">        break;</span>
+      default:
+<span class="nc" id="L213">        throw new IllegalStateException(&quot;Unexpected value: &quot; + step);</span>
+    }
+<span class="fc" id="L215">    DIPStep newStep = dipRequest.getStep();</span>
+<span class="pc bpc" id="L216" title="1 of 4 branches missed.">    return newStep != DIPStep.END &amp;&amp; newStep != step;</span>
+  }
+
+  /**
+   * Try to launch first step of DIP (step 1)
+   *
+   * @param dipRequestFactory
+   * @param dipRequest
+   * @param client
+   *
+   * @return 0 if OK, 1 if Warning, 2 if error
+   */
+  int select(final DipRequestFactory dipRequestFactory,
+             final DipRequest dipRequest, final AccessExternalClient client) {
+    try {
+      // Inform Vitam of an Ingest to proceed locally
+<span class="fc" id="L232">      dipRequest.setStep(DIPStep.RETRY_SELECT, 0, dipRequestFactory);</span>
+<span class="fc" id="L233">      VitamContext vitamContext = dipRequest.getVitamContext();</span>
+<span class="fc" id="L234">      JsonNode jsonNode = dipRequest.getSelectJson();</span>
+<span class="fc" id="L235">      RequestResponse requestResponse =</span>
+<span class="fc" id="L236">          client.exportDIP(vitamContext, jsonNode);</span>
+<span class="pc bpc" id="L237" title="1 of 2 branches missed.">      if (!requestResponse.isOk()) {</span>
+<span class="nc" id="L238">        String requestIdNew =</span>
+<span class="nc" id="L239">            requestResponse.getHeaderString(GlobalDataRest.X_REQUEST_ID);</span>
+<span class="nc bnc" id="L240" title="All 4 branches missed.">        if (requestIdNew == null || requestIdNew.isEmpty()) {</span>
+<span class="nc" id="L241">          requestIdNew = &quot;FAKE_REQUEST_ID&quot;;</span>
+        }
+<span class="nc" id="L243">        dipRequest.setRequestId(requestIdNew);</span>
+<span class="nc" id="L244">        Status status = Status.fromStatusCode(requestResponse.getStatus());</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        switch (status) {</span>
+          case SERVICE_UNAVAILABLE:
+            // Should retry later on
+<span class="nc" id="L248">            logger.warn(ERROR_MESSAGE, &quot;Issue since service unavailable&quot;,</span>
+                        requestResponse);
+<span class="nc" id="L250">            dipRequest.setStep(DIPStep.RETRY_SELECT, 0, dipRequestFactory);</span>
+            // Next step is RETRY_SELECT
+<span class="nc" id="L252">            return 1;</span>
+          default:
+            // Very Bad: inform back of error
+<span class="nc" id="L255">            logger.error(ERROR_MESSAGE, ISSUE_SINCE_SELECT_PRODUCES_AN_ERROR,</span>
+                         requestResponse);
+<span class="nc" id="L257">            dipRequest.setStep(DIPStep.ERROR, status.getStatusCode(),</span>
+                               dipRequestFactory);
+            // Will inform back of error which could not be fixed when reloaded
+        }
+        // Next step is ERROR
+<span class="nc" id="L262">        return 2;</span>
+      }
+      // Select sent and accepted
+<span class="fc" id="L265">      RequestResponseOK responseOK = (RequestResponseOK) requestResponse;</span>
+<span class="fc" id="L266">      dipRequest.setFromRequestResponse(responseOK);</span>
+
+      // Now will start DIP pooling
+<span class="fc" id="L269">      dipRequest</span>
+<span class="fc" id="L270">          .setStep(DIPStep.RETRY_DIP, DIPStep.RETRY_DIP.getStatusMonitor(),</span>
+                   dipRequestFactory);
+<span class="fc" id="L272">      return 0;</span>
+<span class="nc" id="L273">    } catch (InvalidParseOperationException e) {</span>
+<span class="nc" id="L274">      logger.error(&quot;FATAL: Issue since backup of request produces an error&quot;, e);</span>
+<span class="fc" id="L275">    } catch (VitamClientException e) {</span>
+<span class="fc" id="L276">      logger.error(ISSUE_SINCE_SELECT_PRODUCES_AN_ERROR, e);</span>
+      // Should retry select from the beginning
+      try {
+        // FIXME this does not take into account various cases since Vitam masks the real reason
+<span class="fc" id="L280">        dipRequest.setStep(DIPStep.ERROR, 500, dipRequestFactory);</span>
+        // Will inform back of error which could not be fixed when reloaded
+        // Ignore: dipRequest.setStep(DIPStep.RETRY_SELECT, 0, dipRequestFactory);
+<span class="nc" id="L283">      } catch (InvalidParseOperationException ex) {</span>
+        // very bad
+<span class="nc" id="L285">        logger.error(&quot;FATAL: Very bad since cannot save DipRequest&quot;, ex);</span>
+<span class="fc" id="L286">      }</span>
+<span class="nc" id="L287">    }</span>
+<span class="fc" id="L288">    return 2;</span>
+  }
+
+  /**
+   * Get the DIP (step 2)
+   *
+   * @param dipRequestFactory
+   * @param dipRequest
+   * @param client
+   * @param adminExternalClient
+   * @param vitamContext
+   *
+   * @return True if OK
+   *
+   * @throws InvalidParseOperationException
+   */
+  boolean getDip(final DipRequestFactory dipRequestFactory,
+                 final DipRequest dipRequest, final AccessExternalClient client,
+                 final AdminExternalClient adminExternalClient,
+                 final VitamContext vitamContext)
+      throws InvalidParseOperationException {
+<span class="fc" id="L309">    Response response = null;</span>
+    try {
+<span class="fc" id="L311">      dipRequest.setStep(DIPStep.RETRY_DIP, 0, dipRequestFactory);</span>
+<span class="fc" id="L312">      OperationCheck operationCheck = new OperationCheck(adminExternalClient);</span>
+<span class="fc bfc" id="L313" title="All 2 branches covered.">      if (operationCheck.checkAvailabilityAtr(dipRequest.getTenantId(),</span>
+<span class="fc" id="L314">                                              dipRequest.getRequestId())) {</span>
+<span class="fc" id="L315">        response = client.getDIPById(vitamContext, dipRequest.getRequestId());</span>
+<span class="fc" id="L316">        Status status = Status.fromStatusCode(response.getStatus());</span>
+<span class="fc bfc" id="L317" title="All 3 branches covered.">        switch (status) {</span>
+          case OK:
+          case ACCEPTED:
+<span class="fc" id="L320">            sendDIP(dipRequestFactory, dipRequest, response);</span>
+<span class="fc" id="L321">            return true;</span>
+          case SERVICE_UNAVAILABLE:
+          case NOT_FOUND:
+            // Should retry later on
+<span class="fc" id="L325">            logger.debug(&quot;Service or DIP unavailable yet\n\t{}&quot;,</span>
+<span class="fc" id="L326">                         status.getReasonPhrase());</span>
+<span class="fc" id="L327">            return false;</span>
+          default:
+            // Very Bad: inform back of error
+<span class="fc" id="L330">            logger.error(ERROR_MESSAGE, ISSUE_SINCE_SELECT_PRODUCES_AN_ERROR,</span>
+<span class="fc" id="L331">                         status.getReasonPhrase());</span>
+<span class="fc" id="L332">            dipRequest.setStep(DIPStep.ERROR, response.getStatus(),</span>
+                               dipRequestFactory);
+        }
+      }
+<span class="nc" id="L336">    } catch (VitamClientException e) {</span>
+<span class="nc" id="L337">      logger.warn(&quot;Issue since access client produces an error&quot;, e);</span>
+    } finally {
+      // Shall read all InputStream
+<span class="fc" id="L340">      StreamUtils.consumeAnyEntityAndClose(response);</span>
+    }
+<span class="fc" id="L342">    return false;</span>
+  }
+
+  /**
+   * Send the DIP back to the Waarp Partner, directly from step 2 (DIP
+   * retrieve) (step 3)
+   *
+   * @param dipRequestFactory
+   * @param dipRequest
+   * @param response
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendDIP(final DipRequestFactory dipRequestFactory,
+                       final DipRequest dipRequest, final Response response)
+      throws InvalidParseOperationException {
+<span class="fc" id="L358">    try (final InputStream inputStream = response</span>
+<span class="fc" id="L359">        .readEntity(InputStream.class)) {</span>
+      // Write file to be forwarded
+<span class="fc" id="L361">      File targetFile = dipRequest.getDipFile(dipRequestFactory);</span>
+<span class="fc" id="L362">      Path target = targetFile.toPath();</span>
+<span class="fc" id="L363">      Files.copy(inputStream, target, REPLACE_EXISTING);</span>
+      // Write back the content of the DIP through Waarp
+<span class="fc" id="L365">      sendDipFile(dipRequestFactory, dipRequest, targetFile);</span>
+<span class="nc" id="L366">    } catch (IOException e) {</span>
+<span class="nc" id="L367">      logger</span>
+<span class="nc" id="L368">          .error(&quot;File must be writable or InputStream error during close&quot;, e);</span>
+<span class="nc" id="L369">      dipRequest</span>
+<span class="nc" id="L370">          .setStep(DIPStep.ERROR, Status.INTERNAL_SERVER_ERROR.getStatusCode(),</span>
+                   dipRequestFactory);
+<span class="fc" id="L372">    }</span>
+<span class="fc" id="L373">  }</span>
+
+  /**
+   * Step to send DIP before finished (step 3)
+   *
+   * @param dipRequestFactory
+   * @param dipRequest
+   * @param targetFile
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendDipFile(final DipRequestFactory dipRequestFactory,
+                           final DipRequest dipRequest, final File targetFile)
+      throws InvalidParseOperationException {
+<span class="fc" id="L387">    dipRequest.setStep(DIPStep.RETRY_DIP_FORWARD, 0, dipRequestFactory);</span>
+<span class="fc" id="L388">    if (!dipRequestFactory.getManagerToWaarp(dipRequest)</span>
+<span class="fc bfc" id="L389" title="All 2 branches covered.">                          .sendBackInformation(dipRequestFactory, dipRequest,</span>
+<span class="fc" id="L390">                                               targetFile.getAbsolutePath(),</span>
+                                               DIP)) {
+      // ATR already there but not sent, so retry
+<span class="fc" id="L393">      dipRequest.setStep(DIPStep.RETRY_DIP_FORWARD, 0, dipRequestFactory);</span>
+    } else {
+<span class="fc" id="L395">      toDelete(dipRequestFactory, dipRequest);</span>
+    }
+<span class="fc" id="L397">  }</span>
+
+  /**
+   * Finalize DipRequest, whatever Done or in Error (final step 4 in case
+   * of Done)
+   *
+   * @param dipRequestFactory
+   * @param dipRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void toDelete(final DipRequestFactory dipRequestFactory,
+                        final DipRequest dipRequest)
+      throws InvalidParseOperationException {
+    // Ensure it will not be reloaded
+<span class="fc" id="L412">    dipRequest.setStep(DIPStep.END, 0, dipRequestFactory);</span>
+<span class="pc bpc" id="L413" title="1 of 2 branches missed.">    if (!dipRequestFactory.removeDipRequest(dipRequest)) {</span>
+<span class="nc" id="L414">      logger.error(&quot;Issue while cleaning this DipRequest: {}&quot;, dipRequest);</span>
+    } else {
+<span class="fc" id="L416">      logger.info(&quot;End of DipRequest: {}&quot;, dipRequest);</span>
+    }
+<span class="fc" id="L418">  }</span>
+
+  /**
+   * If in Error, will send back the status of the operation to the Waarp
+   * Partner before ending.
+   *
+   * @param dipRequestFactory
+   * @param dipRequest
+   *
+   * @throws InvalidParseOperationException
+   */
+  private void sendErrorBack(final DipRequestFactory dipRequestFactory,
+                             final DipRequest dipRequest)
+      throws InvalidParseOperationException {
+<span class="fc" id="L432">    logger.warn(&quot;Error to feedback since status not ok to restart: {}&quot;,</span>
+                dipRequest);
+    // Feedback through Waarp
+<span class="fc" id="L435">    File file = dipRequest.getErrorFile(dipRequestFactory);</span>
+<span class="pc bpc" id="L436" title="1 of 2 branches missed.">    if (!file.canRead()) {</span>
+      // Create a pseudo one
+<span class="fc" id="L438">      Status status = Status.fromStatusCode(dipRequest.getStatus());</span>
+<span class="fc" id="L439">      VitamError error = getErrorEntity(status, status.getReasonPhrase(),</span>
+                                        &quot;Internal error while processing the DIP&quot;);
+<span class="fc" id="L441">      String err = error.toString();</span>
+      try {
+<span class="fc" id="L443">        FileUtils.write(file, err, StandardCharsets.UTF_8);</span>
+<span class="nc" id="L444">      } catch (IOException e) {</span>
+        // very bad
+<span class="nc" id="L446">        logger.error(&quot;Very bad since cannot save pseudo DIP&quot;, e);</span>
+<span class="nc" id="L447">        return;</span>
+<span class="fc" id="L448">      }</span>
+    }
+<span class="fc" id="L450">    if (dipRequestFactory.getManagerToWaarp(dipRequest)</span>
+<span class="pc bpc" id="L451" title="1 of 2 branches missed.">                         .sendBackInformation(dipRequestFactory, dipRequest,</span>
+<span class="fc" id="L452">                                              file.getAbsolutePath(),</span>
+                                              DIP_FAILED)) {
+      // Very end of this IngestRequest
+<span class="fc" id="L455">      toDelete(dipRequestFactory, dipRequest);</span>
+    }
+    // else Since not sent, will retry later on: keep as is
+<span class="fc" id="L458">  }</span>
+
+  private VitamError getErrorEntity(Status status, String msg,
+                                    String description) {
+<span class="fc" id="L462">    return new VitamError(status.name()).setHttpCode(status.getStatusCode())</span>
+<span class="fc" id="L463">                                        .setContext(&quot;access&quot;)</span>
+<span class="fc" id="L464">                                        .setState(&quot;code_vitam&quot;).setMessage(msg)</span>
+<span class="fc" id="L465">                                        .setDescription(description);</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>
