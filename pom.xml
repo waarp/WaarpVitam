@@ -288,7 +288,7 @@
     <test-containers.version>1.13.0</test-containers.version>
     <apache.ant.version>1.10.8</apache.ant.version>
     <zjsonpatch.version>0.4.11</zjsonpatch.version>
-    <log4j2.version>2.13.3</log4j2.version>
+    <log4j2.version>2.17.0</log4j2.version>
     <selenium.version>3.141.59</selenium.version><!--Java6 shaded version -->
     <assertj-swing.version>3.9.2</assertj-swing.version>
     <json-patch.version>1.13</json-patch.version>
