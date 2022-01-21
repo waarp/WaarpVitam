@@ -251,7 +251,7 @@
     <commons-codec.version>1.15</commons-codec.version>
     <commons-beanutils.version>1.9.4</commons-beanutils.version>
     <commons-cli.version>1.4</commons-cli.version>
-    <h2.version>1.4.200</h2.version><!--Java6 version -->
+    <h2.version>2.1.210</h2.version><!--Java6 version -->
     <mariadb.version>2.6.2</mariadb.version>
     <mysql.version>8.0.21</mysql.version>
     <postgresql.version>42.2.16.jre7</postgresql.version>
